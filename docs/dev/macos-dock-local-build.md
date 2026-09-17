@@ -74,3 +74,16 @@ Unit tests establish ordering, balanced hide ownership, failure handling,
 stale completion rejection, physical/local motion separation, and short timers.
 They do not establish native Dock behavior or compatibility with a particular
 third-party client.
+
+## Menu bar application
+
+The macOS bundle starts as an `LSUIElement` application. Restoring the settings
+window keeps the accessory activation policy, so the menu bar icon remains the
+entry point without adding a normal Dock tile. The input core disables Qt's
+foreground application transformation before constructing `QApplication`; it no
+longer changes process type from its worker thread.
+
+On macOS 27, the system may separately display a background-activity Dock item.
+In local verification, quitting that existing item and relaunching left only the
+menu bar icon, with the input client connected. This observation does not establish
+that the system background indicator can never recur.

@@ -74,6 +74,11 @@ int main(int argc, char **argv)
 #endif
 
   QApplication::setApplicationName(QStringLiteral("%1 Core").arg(kAppName));
+#if defined(Q_OS_MACOS)
+  // The input core has no UI. Prevent Qt's Cocoa plugin from registering it
+  // as a foreground app before the event loop starts, including unbundled use.
+  qputenv("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM", "1");
+#endif
   QApplication app(argc, argv);
 
   Arch arch;

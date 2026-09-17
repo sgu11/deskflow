@@ -32,6 +32,9 @@
 	<string>@BUNDLE_COPYRIGHT@</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
+	<!-- The menu bar icon owns the UI; opening settings must not add a Dock tile. -->
+	<key>LSUIElement</key>
+	<true/>
 
 	<!-- Prevent macOS from terminating during memory pressure -->
 	<key>NSSupportsAutomaticTermination</key>

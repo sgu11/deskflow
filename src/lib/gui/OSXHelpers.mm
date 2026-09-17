@@ -105,8 +105,8 @@ bool isOSXInterfaceStyleDark()
 
 void forceAppActive()
 {
+  [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyAccessory];
   [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
-  [[NSApplication sharedApplication] setActivationPolicy:NSApplicationActivationPolicyRegular];
 }
 
 void macOSNativeHide()
