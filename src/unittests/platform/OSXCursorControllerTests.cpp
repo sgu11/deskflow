@@ -5,6 +5,7 @@
  */
 
 #include "platform/OSXCursorController.h"
+#include "platform/OSXServerCursorMotion.h"
 
 #include <ApplicationServices/ApplicationServices.h>
 #include <QStringList>
@@ -55,7 +56,7 @@ private Q_SLOTS:
   void parkingEvent_metadataSurvivesConstruction_withoutPostingInput()
   {
     FakeCursor backend;
-    OSXCursorController cursor(backend, true);
+    OSXCursorController cursor(backend, false);
     cursor.leave();
     auto event = CGEventCreateMouseEvent(nullptr, kCGEventMouseMoved, CGPointMake(500, 500), kCGMouseButtonLeft);
     QVERIFY(event != nullptr);
@@ -73,19 +74,48 @@ private Q_SLOTS:
     QCOMPARE(dy, int64_t(0));
   }
 
-  void serverLeave_hidesBeforeParking_andKeepsCapture()
+  void serverLeave_neverInjects_andSettlesWithoutCapture()
   {
     FakeCursor backend;
     OSXCursorController cursor(backend, true);
     cursor.leave();
-    QCOMPARE(backend.calls, QStringList({"hide", "capture", "park"}));
-    QVERIFY(cursor.parkingDelivered(backend.token));
-    cursor.settle(backend.token);
+    QCOMPARE(backend.calls, QStringList({"hide", "release"}));
+    const auto token = cursor.parkingToken();
+    QVERIFY(cursor.acceptsParkingEvent(token));
+    QVERIFY(cursor.parkingDelivered(token));
+    cursor.settle(token);
+    cursor.leave();
+    QCOMPARE(backend.calls, QStringList({"hide", "release", "show", "hide"}));
     QCOMPARE(backend.depth, 1);
-    QVERIFY(backend.captured);
+    QVERIFY(!backend.captured);
     cursor.enter();
+    QVERIFY(!cursor.acceptsParkingEvent(token));
+    cursor.settle(token);
     QCOMPARE(backend.depth, 0);
     QVERIFY(!backend.captured);
+  }
+
+  void serverMotion_preservesPhysicalDeltas_andRemovesLocalDrag()
+  {
+    for (const auto type :
+         {kCGEventMouseMoved, kCGEventLeftMouseDragged, kCGEventRightMouseDragged, kCGEventOtherMouseDragged}) {
+      auto event = CGEventCreateMouseEvent(nullptr, type, CGPointMake(0, 600), kCGMouseButtonLeft);
+      QVERIFY(event != nullptr);
+      CGEventSetIntegerValueField(event, kCGMouseEventDeltaX, -7);
+      CGEventSetIntegerValueField(event, kCGMouseEventDeltaY, 3);
+      const auto motion = OSXServerCursorMotion::redirect(event, CGPointMake(-960, 540));
+      QCOMPARE(motion.dx, -7);
+      QCOMPARE(motion.dy, 3);
+      QCOMPARE(CGEventGetType(event), kCGEventMouseMoved);
+      QCOMPARE(CGEventGetLocation(event).x, -960.0);
+      QCOMPARE(CGEventGetLocation(event).y, 540.0);
+      QCOMPARE(CGEventGetIntegerValueField(event, kCGMouseEventDeltaX), int64_t(0));
+      QCOMPARE(CGEventGetIntegerValueField(event, kCGMouseEventDeltaY), int64_t(0));
+      // No arbitrary delta threshold: fast physical motion must remain intact.
+      CGEventSetIntegerValueField(event, kCGMouseEventDeltaX, 2400);
+      QCOMPARE(OSXServerCursorMotion::redirect(event, CGPointMake(-960, 540)).dx, 2400);
+      CFRelease(event); // Construction only; never inject input in unit tests.
+    }
   }
 
   void clientLeave_doesNotCaptureHardware()
@@ -102,7 +132,7 @@ private Q_SLOTS:
   void fastReentry_rejectsOldMove_andOldCompletion()
   {
     FakeCursor backend;
-    OSXCursorController cursor(backend, true);
+    OSXCursorController cursor(backend, false);
     cursor.leave();
     const auto oldToken = backend.token;
     QVERIFY(cursor.parkingDelivered(oldToken));
@@ -123,7 +153,7 @@ private Q_SLOTS:
   void duplicateEvents_keepOneHideRequest()
   {
     FakeCursor backend;
-    OSXCursorController cursor(backend, true);
+    OSXCursorController cursor(backend, false);
     cursor.leave();
     const auto before = backend.calls;
     cursor.leave();
@@ -146,7 +176,7 @@ private Q_SLOTS:
   void failedHide_doesNotCreateUnownedShow()
   {
     FakeCursor backend;
-    OSXCursorController cursor(backend, true);
+    OSXCursorController cursor(backend, false);
     backend.hideSucceeds = false;
     cursor.leave();
     cursor.enter();
@@ -157,7 +187,7 @@ private Q_SLOTS:
   void failedInitialHide_retriesAfterParking()
   {
     FakeCursor backend;
-    OSXCursorController cursor(backend, true);
+    OSXCursorController cursor(backend, false);
     backend.hideSucceeds = false;
     cursor.leave();
     QVERIFY(cursor.parkingDelivered(backend.token));
@@ -172,7 +202,7 @@ private Q_SLOTS:
   void failedShow_retainsOwnershipForRetry()
   {
     FakeCursor backend;
-    OSXCursorController cursor(backend, true);
+    OSXCursorController cursor(backend, false);
     cursor.leave();
     QVERIFY(cursor.parkingDelivered(backend.token));
     backend.showSucceeds = false;

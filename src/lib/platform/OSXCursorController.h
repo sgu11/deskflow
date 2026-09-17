@@ -12,7 +12,7 @@
 #include <cstdlib>
 
 // Owns one balanced Quartz hide request. All operations run on the Deskflow
-// event thread; only acceptsParkingEvent() is also read by the Quartz tap.
+// event thread; only the atomic token accessors are also read by the Quartz tap.
 class OSXCursorController
 {
 public:
@@ -39,9 +39,11 @@ public:
     m_token = kParkingTag | (++m_generation & 0xffffffffULL);
     if (!m_hidden)
       m_hidden = m_backend.hideCursor();
-    m_backend.captureMouse(m_primary);
-    // A real, tagged move dismisses hover. A warp alone generates no event.
-    m_backend.parkCursor(m_token.load());
+    // Server motion is redirected in the HID tap. Do not depend on foreground
+    // cursor disassociation, and do not inject a second server motion stream.
+    m_backend.captureMouse(false);
+    if (!m_primary)
+      m_backend.parkCursor(m_token.load());
   }
 
   void enter()
@@ -75,12 +77,17 @@ public:
       m_hidden = false;
     }
     m_hidden = m_backend.hideCursor();
-    // In particular, delayed settling must not release a server's capture.
+    // Settling does not change input routing or mouse association.
   }
 
   bool acceptsParkingEvent(int64_t token) const
   {
     return isParkingToken(token) && token == m_token.load();
+  }
+
+  int64_t parkingToken() const
+  {
+    return m_token.load();
   }
 
   static bool isParkingToken(int64_t token)

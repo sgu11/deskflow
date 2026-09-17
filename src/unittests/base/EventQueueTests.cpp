@@ -10,11 +10,39 @@
 
 #include <QTest>
 
+#include <chrono>
 #include <memory>
 
 void EventQueueTests::initTestCase()
 {
   m_arch.init();
+}
+
+void EventQueueTests::clock_preservesFractionalSeconds()
+{
+  // Bracket the public clock with its monotonic source. Integer-second
+  // truncation must fail regardless of whether a sleep crosses a second.
+  const auto seconds = [] {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  };
+  const double before = seconds();
+  const double actual = Arch::time();
+  const double after = seconds();
+  QVERIFY2(actual >= before && actual <= after, "Arch::time lost subsecond precision");
+}
+
+void EventQueueTests::shortTimer_firesWithoutWaitingForWholeSecond()
+{
+  EventQueue events;
+  const auto start = std::chrono::steady_clock::now();
+  auto *timer = events.newOneShotTimer(0.010, nullptr);
+  Event event;
+  const bool received = events.getEvent(event, 0.25);
+  const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  events.deleteTimer(timer);
+  QVERIFY(received);
+  QCOMPARE(event.getType(), EventTypes::Timer);
+  QVERIFY2(elapsed >= 0.009 && elapsed < 0.25, "10ms timer did not fire within its subsecond deadline");
 }
 
 void EventQueueTests::dispatchEvent_noHandler_returnsFalse()

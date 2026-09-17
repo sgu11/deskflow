@@ -41,6 +41,7 @@
 #include <mach-o/dyld.h>
 #include <math.h>
 
+#include "platform/OSXServerCursorMotion.h"
 #include <cstdlib>
 
 #pragma clang diagnostic push
@@ -206,12 +207,14 @@ OSXScreen::OSXScreen(IEventQueue *events, bool isPrimary, bool enableLangSync)
     const double delay = OSXCursorController::settleDelay(std::getenv("DESKFLOW_MACOS_HIDE_DELAY_MS"));
     if (delay == 0) {
       m_cursorController.settle(token);
+      LOG_INFO("cursor hide refresh finished %.1f ms after leave", (Arch::time() - m_cursorLeaveTime) * 1000);
       return;
     }
     m_hideTimer = m_events->newOneShotTimer(delay, nullptr);
     m_events->addHandler(EventTypes::Timer, m_hideTimer, [this, token](const auto &) {
       cancelPendingHide();
       m_cursorController.settle(token);
+      LOG_INFO("cursor hide refresh finished %.1f ms after leave", (Arch::time() - m_cursorLeaveTime) * 1000);
     });
   });
 
@@ -724,6 +727,18 @@ void OSXScreen::captureMouse(bool capture)
 
 void OSXScreen::parkCursor(int64_t token)
 {
+  if (m_isPrimary)
+    return;
+  if (m_eventTapRunLoop && CFRunLoopGetCurrent() != m_eventTapRunLoop) {
+    CFRunLoopPerformBlock(m_eventTapRunLoop, kCFRunLoopDefaultMode, ^{
+      parkCursor(token);
+    });
+    CFRunLoopWakeUp(m_eventTapRunLoop);
+    return;
+  }
+  if (!m_cursorController.acceptsParkingEvent(token))
+    return;
+
   int32_t x, y;
   getCursorPos(x, y);
   CGDirectDisplayID display = CGMainDisplayID();
@@ -904,10 +919,11 @@ void OSXScreen::leave()
 {
   // No Dock detection or special edge zones: act on every confirmed leave,
   // including fast crossings before Dock hover/magnification has started.
-  m_isOnScreen = false;
   if (m_isPrimary)
     avoidHesitatingCursor();
+  m_cursorLeaveTime = Arch::time();
   m_cursorController.leave();
+  m_isOnScreen = false;
 }
 
 bool OSXScreen::setClipboard(ClipboardID, const IClipboard *src)
@@ -1087,15 +1103,33 @@ bool OSXScreen::onMouseMove(CGEventRef event)
 
     sendEvent(EventTypes::PrimaryScreenMotionOnPrimary, MotionInfo::alloc(m_xCursor, m_yCursor));
   } else {
-    // motion on secondary screen.  the cursor is frozen (see leave()), so read
-    // raw deltas from the event instead of diffing position.
-    int32_t dx = (int32_t)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX);
-    int32_t dy = (int32_t)CGEventGetIntegerValueField(event, kCGMouseEventDeltaY);
+    const auto token = m_cursorController.parkingToken();
+    if (!m_cursorController.acceptsParkingEvent(token))
+      return false;
+    const bool firstMove = token != m_serverParkingToken;
+    if (firstMove) {
+      CGDirectDisplayID display = CGMainDisplayID();
+      CGDisplayCount count = 0;
+      CGGetDisplaysWithPoint(CGEventGetLocation(event), 1, &display, &count);
+      if (count == 0)
+        display = CGMainDisplayID();
+      const auto bounds = CGDisplayBounds(display);
+      m_serverParkingPoint = CGPointMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds));
+      m_serverParkingToken = token;
+    }
+    // Save the physical delta before changing only the downstream local event.
+    // Every remote move keeps the local cursor at the same point, including
+    // when Dock or another foreground app defeats cursor disassociation.
+    const auto [dx, dy] = OSXServerCursorMotion::redirect(event, m_serverParkingPoint);
 
     LOG_VERBOSE("mouse delta %+d,%+d", dx, dy);
 
     if (dx != 0 || dy != 0) {
       sendEvent(EventTypes::PrimaryScreenMotionOnSecondary, MotionInfo::alloc(dx, dy));
+    }
+    if (firstMove) {
+      LOG_INFO("redirecting local cursor while forwarding physical mouse deltas");
+      m_events->addEvent(Event(EventTypes::OsxScreenCursorParked, this, new CursorParkedEvent(token)));
     }
   }
 
@@ -1762,10 +1796,9 @@ CGEventRef OSXScreen::handleCGInputEvent(CGEventTapProxy proxy, CGEventType type
   case kCGEventRightMouseDragged:
   case kCGEventOtherMouseDragged:
   case kCGEventMouseMoved:
-    // off-screen the cursor is frozen (see leave()), so fall through to consume
-    // the move below instead of returning (leaking) it to local apps.
-    screen->onMouseMove(event);
-    break;
+    // Local apps receive a stationary, zero-delta move while remote. Buttons,
+    // wheel and keys still follow off-screen suppression below.
+    return screen->onMouseMove(event) ? event : nullptr;
   case kCGEventScrollWheel:
     screen->onMouseWheel(
         screen->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis2)),

@@ -47,7 +47,11 @@ cmake --install "$build_dir" --prefix "$stage_dir"
 bundle="$stage_dir/Deskflow.app"
 core="$bundle/Contents/MacOS/deskflow-core"
 # Deploy once, including the separate Homebrew QtSvg framework search path.
-"$deploy_qt" "$bundle" "-executable=$core" "-libpath=$qt_svg_lib" '-codesign=-'
+mkdir -p "$bundle/Contents/Frameworks"
+ditto "$qt_svg_lib/QtSvg.framework" "$bundle/Contents/Frameworks/QtSvg.framework"
+"$deploy_qt" "$bundle" "-executable=$core" \
+  "-executable=$bundle/Contents/Frameworks/QtSvg.framework/Versions/A/QtSvg" \
+  "-libpath=$qt_svg_lib" '-codesign=-'
 codesign --verify --deep --strict "$bundle"
 
 # Refuse a supposedly standalone bundle that still needs this build tree or Brew.
@@ -70,6 +74,12 @@ for p in root.rglob('*'):
         dep = line.strip().split(' (', 1)[0]
         if dep in identities:
             continue
+        if dep.startswith('@loader_path/') and not (p.parent / dep.removeprefix('@loader_path/')).exists():
+            raise SystemExit(f'Missing loader-relative dependency in {p.relative_to(root)}: {dep}')
+        if dep.startswith('@rpath/'):
+            suffix = dep.removeprefix('@rpath/')
+            if not any((root / 'Contents' / folder / suffix).exists() for folder in ('Frameworks', 'Libraries')):
+                raise SystemExit(f'Unresolved bundled dependency in {p.relative_to(root)}: {dep}')
         if not dep.startswith(('@', '/System/Library/', '/usr/lib/')):
             raise SystemExit(f'Unbundled dependency in {p.relative_to(root)}: {dep}')
 print(f'Standalone dependency check passed: {count} Mach-O files')

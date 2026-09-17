@@ -225,7 +225,7 @@ private:
   bool m_isPrimary;
 
   // true if mouse has entered the screen
-  bool m_isOnScreen;
+  std::atomic<bool> m_isOnScreen;
 
   // the display
   CGDirectDisplayID m_displayID;
@@ -254,6 +254,10 @@ private:
   std::vector<MouseButtonEventMapType> MouseButtonEventMap;
 
   OSXCursorController m_cursorController;
+  double m_cursorLeaveTime = 0;
+  // Owned by the event-tap thread; a new generation chooses a fresh display.
+  int64_t m_serverParkingToken = 0;
+  CGPoint m_serverParkingPoint = CGPointZero;
 
   // keyboard stuff
   OSXKeyState *m_keyState;
