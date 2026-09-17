@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: (C) 2025 Deskflow Developers
 # SPDX-License-Identifier: MIT
 
+create_test(
+  NAME MSWindowsKeyRoutingTests
+  DEPENDS base
+  LIBS arch
+  SOURCE MSWindowsKeyRoutingTests.cpp
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
 if (WIN32)
   create_test(
     NAME MSWindowsClipboardTests
@@ -10,6 +18,13 @@ if (WIN32)
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
   )
 elseif(APPLE)
+  create_test(
+    NAME OSXCursorControllerTests
+    DEPENDS base
+    LIBS arch
+    SOURCE OSXCursorControllerTests.cpp
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
   create_test(
     NAME OSXClipboardTests
     DEPENDS platform

@@ -10,6 +10,7 @@
 
 #include "deskflow/PlatformScreen.h"
 #include "platform/OSXClipboard.h"
+#include "platform/OSXCursorController.h"
 #include "platform/OSXPowerManager.h"
 
 #include <Carbon/Carbon.h>
@@ -41,7 +42,7 @@ class IEventQueue;
 class Mutex;
 
 //! Implementation of IPlatformScreen for OS X
-class OSXScreen : public PlatformScreen
+class OSXScreen : public PlatformScreen, private OSXCursorController::Backend
 {
 public:
   OSXScreen(IEventQueue *events, bool isPrimary, bool enableLangSync = false);
@@ -127,9 +128,12 @@ private:
 
   bool onHotKey(EventRef event) const;
 
-  // Added here to allow the carbon cursor hack to be called.
-  void showCursor();
-  void hideCursor();
+  // Quartz operations used by the cursor transition controller.
+  bool showCursor() override;
+  bool hideCursor() override;
+  void parkCursor(int64_t token) override;
+  void captureMouse(bool capture) override;
+  CGEventRef handleCursorParkingEvent(CGEventRef event);
 
   // map deskflow mouse button to mac buttons
   ButtonID mapDeskflowButtonToMac(uint16_t) const;
@@ -249,7 +253,7 @@ private:
   using MouseButtonEventMapType = std::map<uint16_t, CGEventType>;
   std::vector<MouseButtonEventMapType> MouseButtonEventMap;
 
-  bool m_cursorHidden;
+  OSXCursorController m_cursorController;
 
   // keyboard stuff
   OSXKeyState *m_keyState;
@@ -267,6 +271,10 @@ private:
   EventQueueTimer *m_clipboardTimer;
 
   EventQueueTimer *m_axTimer;
+
+  // One balanced reassertion after the parking event reaches the Quartz tap.
+  EventQueueTimer *m_hideTimer = nullptr;
+  void cancelPendingHide();
 
   // window object that gets user input events when the server
   // has focus.

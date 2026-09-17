@@ -132,4 +132,8 @@ private:
   ClipboardChunkAssemblyState m_clipboardChunkState;
   bool m_isUserNotifiedAboutLayoutSyncError = false;
   deskflow::KeyboardLayoutManager m_layoutManager;
+
+  // WiFi smoothing: true while draining one socket batch. Mouse motion
+  // seen mid-batch is compressed to last-wins and flushed once at the end.
+  bool m_inBatch = false;
 };

@@ -92,6 +92,9 @@ enum class EventTypes : uint32_t
 
   OsxScreenConfirmSleep,
 
+  /// Internal acknowledgement of a tagged macOS cursor parking event.
+  OsxScreenCursorParked,
+
   /// This event is sent whenever a server accepts a client.
   ClientListenerAccepted,
 

@@ -82,6 +82,7 @@ void ServerProxy::handleData()
   // handle messages until there are no more.  first read message code.
   uint8_t code[4];
   uint32_t n = m_stream->read(code, 4);
+  m_inBatch = true;
   while (n != 0) {
     // verify we got an entire code
     if (n != 4) {
@@ -119,6 +120,7 @@ void ServerProxy::handleData()
     // next message
     n = m_stream->read(code, 4);
   }
+  m_inBatch = false;
 
   flushCompressedMouse();
 }
@@ -691,8 +693,9 @@ void ServerProxy::mouseMove()
   // note if we should ignore the move
   ignore = m_ignoreMouse;
 
-  // compress mouse motion events if more input follows
-  if (!ignore && !m_compressMouse && m_stream->isReady()) {
+  // compress mouse motion events if more input follows. mid-batch moves
+  // always compress so one drain forwards last-wins once at the end.
+  if (!ignore && !m_compressMouse && (m_inBatch || m_stream->isReady())) {
     m_compressMouse = true;
   }
 
@@ -724,8 +727,9 @@ void ServerProxy::mouseRelativeMove()
   // note if we should ignore the move
   ignore = m_ignoreMouse;
 
-  // compress mouse motion events if more input follows
-  if (!ignore && !m_compressMouseRelative && m_stream->isReady()) {
+  // compress mouse motion events if more input follows. mid-batch moves
+  // always compress so one drain forwards last-wins once at the end.
+  if (!ignore && !m_compressMouseRelative && (m_inBatch || m_stream->isReady())) {
     m_compressMouseRelative = true;
   }
 

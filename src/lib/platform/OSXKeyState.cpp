@@ -686,6 +686,15 @@ void OSXKeyState::fakeKey(const Keystroke &keystroke)
     );
 
     setKeyboardModifiers(virtualKey, keyDown);
+    // IME toggle hotkeys (Ctrl+Space, Alt+Space) use the WindowServer
+    // event-tap path. IOHIDPostEvent is deprecated and only flips the
+    // global TIS (menu bar) without activating the focused app's input
+    // context, so typing stays English.
+    const bool isImeToggleHotkey = (virtualKey == kVK_Space) && (m_controlPressed || m_altPressed);
+    if (isImeToggleHotkey) {
+      postKeyboardKey(virtualKey, keyDown);
+      break;
+    }
     if (postHIDVirtualKey(virtualKey, keyDown) != KERN_SUCCESS) {
       LOG_WARN("fail to post hid event");
       postKeyboardKey(virtualKey, keyDown);

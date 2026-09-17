@@ -41,6 +41,8 @@
 #include <mach-o/dyld.h>
 #include <math.h>
 
+#include <cstdlib>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
@@ -50,6 +52,24 @@
 __attribute__((used)) __attribute__((section("__CGPreLoginApp,__cgpreloginapp"))) static const char magic_section[] =
     "";
 ////////////////////////////////////////////////////////////
+
+namespace {
+class CursorParkedEvent : public EventData
+{
+public:
+  explicit CursorParkedEvent(int64_t value) : token(value)
+  {
+  }
+  int64_t token;
+};
+
+bool isCursorParkingEvent(CGEventRef event)
+{
+  return event != nullptr && CGEventGetType(event) == kCGEventMouseMoved &&
+         CGEventGetIntegerValueField(event, kCGEventSourceUnixProcessID) == getpid() &&
+         OSXCursorController::isParkingToken(CGEventGetIntegerValueField(event, kCGEventSourceUserData));
+}
+} // namespace
 
 // This isn't in any Apple SDK that I know of as of yet.
 enum
@@ -73,7 +93,6 @@ std::string getProcessName(int pid);
 // TODO: upgrade deprecated function usage in these functions.
 void setZeroSuppressionInterval();
 void avoidSupression();
-void logCursorVisibility();
 void avoidHesitatingCursor();
 
 //
@@ -89,7 +108,7 @@ OSXScreen::OSXScreen(IEventQueue *events, bool isPrimary, bool enableLangSync)
       m_isOnScreen(m_isPrimary),
       m_cursorPosValid(false),
       MouseButtonEventMap(NumButtonIDs),
-      m_cursorHidden(false),
+      m_cursorController(*this, isPrimary),
       m_keyState(nullptr),
       m_sequenceNumber(0),
       m_screensaver(nullptr),
@@ -179,6 +198,22 @@ OSXScreen::OSXScreen(IEventQueue *events, bool isPrimary, bool enableLangSync)
   m_events->addHandler(EventTypes::System, m_events->getSystemTarget(), [this](const auto &e) {
     handleSystemEvent(e);
   });
+  m_events->addHandler(EventTypes::OsxScreenCursorParked, this, [this](const auto &e) {
+    const auto token = static_cast<const CursorParkedEvent *>(e.getDataObject())->token;
+    if (!m_cursorController.parkingDelivered(token))
+      return;
+    cancelPendingHide();
+    const double delay = OSXCursorController::settleDelay(std::getenv("DESKFLOW_MACOS_HIDE_DELAY_MS"));
+    if (delay == 0) {
+      m_cursorController.settle(token);
+      return;
+    }
+    m_hideTimer = m_events->newOneShotTimer(delay, nullptr);
+    m_events->addHandler(EventTypes::Timer, m_hideTimer, [this, token](const auto &) {
+      cancelPendingHide();
+      m_cursorController.settle(token);
+    });
+  });
 
   // install the platform event queue
   m_events->adoptBuffer(new OSXEventQueueBuffer(m_events));
@@ -190,6 +225,7 @@ OSXScreen::~OSXScreen()
 
   m_events->adoptBuffer(nullptr);
   m_events->removeHandler(EventTypes::System, m_events->getSystemTarget());
+  m_events->removeHandler(EventTypes::OsxScreenCursorParked, this);
 
   if (m_pmWatchThread) {
     // make sure the thread has setup the runloop.
@@ -643,7 +679,7 @@ void OSXScreen::fakeMouseWheel(ScrollDelta delta) const
   }
 }
 
-void OSXScreen::showCursor()
+bool OSXScreen::showCursor()
 {
   LOG_DEBUG("showing cursor");
 
@@ -658,15 +694,10 @@ void OSXScreen::showCursor()
     LOG_ERR("failed to show cursor, error=%d", error);
   }
 
-  // appears to fix "mouse randomly not showing" bug
-  CGAssociateMouseAndMouseCursorPosition(true);
-
-  logCursorVisibility();
-
-  m_cursorHidden = false;
+  return error == kCGErrorSuccess;
 }
 
-void OSXScreen::hideCursor()
+bool OSXScreen::hideCursor()
 {
   LOG_DEBUG("hiding cursor");
 
@@ -681,12 +712,62 @@ void OSXScreen::hideCursor()
     LOG_ERR("failed to hide cursor, error=%d", error);
   }
 
-  // appears to fix "mouse randomly not hiding" bug
-  CGAssociateMouseAndMouseCursorPosition(true);
+  return error == kCGErrorSuccess;
+}
 
-  logCursorVisibility();
+void OSXScreen::captureMouse(bool capture)
+{
+  const auto error = CGAssociateMouseAndMouseCursorPosition(!capture);
+  if (error != kCGErrorSuccess)
+    LOG_ERR("failed to change cursor capture, error=%d", error);
+}
 
-  m_cursorHidden = true;
+void OSXScreen::parkCursor(int64_t token)
+{
+  int32_t x, y;
+  getCursorPos(x, y);
+  CGDirectDisplayID display = CGMainDisplayID();
+  CGDisplayCount count = 0;
+  CGGetDisplaysWithPoint(CGPointMake(x, y), 1, &display, &count);
+  if (count == 0)
+    display = CGMainDisplayID();
+  const CGRect bounds = CGDisplayBounds(display);
+  const CGPoint pos = CGPointMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds));
+  CGEventRef event = CGEventCreateMouseEvent(nullptr, kCGEventMouseMoved, pos, kCGMouseButtonLeft);
+  if (event == nullptr) {
+    LOG_ERR("failed to create cursor parking event");
+    return;
+  }
+  // A server's physical modifiers are not the client's synthetic-key state.
+  CGEventSetFlags(
+      event, m_isPrimary ? CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState)
+                         : m_keyState->getModifierStateAsOSXFlags()
+  );
+  CGEventSetIntegerValueField(event, kCGEventSourceUserData, token);
+  CGEventSetIntegerValueField(event, kCGMouseEventDeltaX, 0);
+  CGEventSetIntegerValueField(event, kCGMouseEventDeltaY, 0);
+  CGEventPost(kCGHIDEventTap, event);
+  CFRelease(event);
+}
+
+CGEventRef OSXScreen::handleCursorParkingEvent(CGEventRef event)
+{
+  const auto token = CGEventGetIntegerValueField(event, kCGEventSourceUserData);
+  if (!m_cursorController.acceptsParkingEvent(token))
+    return nullptr;
+  m_events->addEvent(Event(EventTypes::OsxScreenCursorParked, this, new CursorParkedEvent(token)));
+  // Bypass normal mouse forwarding and off-screen suppression. Dock must see
+  // this move; the remote client must not see a center-sized motion delta.
+  return event;
+}
+
+void OSXScreen::cancelPendingHide()
+{
+  if (m_hideTimer != nullptr) {
+    m_events->removeHandler(EventTypes::Timer, m_hideTimer);
+    m_events->deleteTimer(m_hideTimer);
+    m_hideTimer = nullptr;
+  }
 }
 
 void OSXScreen::enable()
@@ -708,11 +789,6 @@ void OSXScreen::enable()
     );
   } else {
     // FIXME -- prevent system from entering power save mode
-
-    hideCursor();
-
-    // warp the mouse to the cursor center
-    fakeMouseMove(m_xCenter, m_yCenter);
 
     // there may be a better way to do this, but we register an event handler even if we're
     // not on the primary display (acting as a client). This way, if a local event comes in
@@ -746,11 +822,14 @@ void OSXScreen::enable()
   } else {
     LOG_ERR("failed to create quartz event tap");
   }
+  if (!m_isPrimary)
+    m_cursorController.leave();
 }
 
 void OSXScreen::disable()
 {
-  showCursor();
+  cancelPendingHide();
+  m_cursorController.enter();
 
   // FIXME -- stop watching jump zones, stop capturing input
 
@@ -792,7 +871,8 @@ void OSXScreen::disable()
 void OSXScreen::enter()
 {
   m_isOnScreen = true;
-  showCursor();
+  cancelPendingHide();
+  m_cursorController.enter();
 
   if (m_isPrimary) {
     // re-couple the mouse to the cursor, undoing the capture from leave()
@@ -822,19 +902,12 @@ bool OSXScreen::canLeave()
 
 void OSXScreen::leave()
 {
-  hideCursor();
-
-  if (m_isPrimary) {
-    avoidHesitatingCursor();
-
-    // capture the mouse: freeze the cursor so no local app sees motion while on
-    // a client (onMouseMove reads raw deltas instead). must follow hideCursor(),
-    // which re-associates. re-coupled in enter()/disable().
-    CGAssociateMouseAndMouseCursorPosition(false);
-  }
-
-  // now off screen
+  // No Dock detection or special edge zones: act on every confirmed leave,
+  // including fast crossings before Dock hover/magnification has started.
   m_isOnScreen = false;
+  if (m_isPrimary)
+    avoidHesitatingCursor();
+  m_cursorController.leave();
 }
 
 bool OSXScreen::setClipboard(ClipboardID, const IClipboard *src)
@@ -1660,20 +1733,9 @@ bool OSXScreen::HotKeyItem::operator<(const HotKeyItem &x) const
 CGEventRef
 OSXScreen::handleCGInputEventSecondary(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon)
 {
-  // this fix is really screwing with the correct show/hide behavior. it
-  // should be tested better before reintroducing.
-  return event;
-
-  OSXScreen *screen = (OSXScreen *)refcon;
-  if (screen->m_cursorHidden && type == kCGEventMouseMoved) {
-
-    CGPoint pos = CGEventGetLocation(event);
-    if (pos.x != screen->m_xCenter || pos.y != screen->m_yCenter) {
-
-      LOG_DEBUG("show cursor on secondary, type=%d pos=%d,%d", type, pos.x, pos.y);
-      screen->showCursor();
-    }
-  }
+  auto *screen = static_cast<OSXScreen *>(refcon);
+  if (isCursorParkingEvent(event))
+    return screen->handleCursorParkingEvent(event);
   return event;
 }
 
@@ -1681,6 +1743,9 @@ OSXScreen::handleCGInputEventSecondary(CGEventTapProxy proxy, CGEventType type, 
 CGEventRef OSXScreen::handleCGInputEvent(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon)
 {
   OSXScreen *screen = (OSXScreen *)refcon;
+
+  if (isCursorParkingEvent(event))
+    return screen->handleCursorParkingEvent(event);
 
   switch (type) {
   case kCGEventLeftMouseDown:
@@ -1918,14 +1983,6 @@ void avoidSupression()
       (kCGEventFilterMaskPermitLocalKeyboardEvents | kCGEventFilterMaskPermitSystemDefinedEvents),
       kCGEventSupressionStateRemoteMouseDrag
   );
-}
-
-void logCursorVisibility()
-{
-  // CGCursorIsVisible is probably deprecated because its unreliable.
-  if (!CGCursorIsVisible()) {
-    LOG_WARN("cursor may not be visible");
-  }
 }
 
 void avoidHesitatingCursor()

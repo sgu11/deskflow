@@ -9,6 +9,7 @@
 #include "base/DirectionTypes.h"
 #include "base/Log.h"
 #include "deskflow/ScreenException.h"
+#include "platform/MSWindowsKeyRouting.h"
 
 #include <cstring>
 #include <mutex>
@@ -417,32 +418,10 @@ static bool keyboardHookHandler(WPARAM wParam, LPARAM lParam)
     PostThreadMessage(g_threadID, DESKFLOW_MSG_KEY, charAndVirtKey, lParam);
   }
 
-  if (g_mode == kHOOK_RELAY_EVENTS) {
-    // let certain keys pass through
-    switch (wParam) {
-    case VK_CAPITAL:
-    case VK_NUMLOCK:
-    case VK_SCROLL:
-      // pass event on.  we want to let these through to
-      // the window proc because otherwise the keyboard
-      // lights may not stay synchronized.
-      break;
-
-    case VK_HANGUL:
-      // pass these modifiers if using a low level hook, discard
-      // them if not.
-      if (g_hookThread == 0) {
-        return true;
-      }
-      break;
-
-    default:
-      // discard
-      return true;
-    }
-  }
-
-  return false;
+  // Korean type-3 Shift+Space can arrive as VK_HANGUL with Space's scan
+  // code. Forward it above, but do not also toggle the local input mode.
+  // This applies to both press and release, with either hook implementation.
+  return deskflow::windows::suppressLocalKey(g_mode == kHOOK_RELAY_EVENTS, static_cast<uint32_t>(wParam));
 }
 
 #if !NO_GRAB_KEYBOARD

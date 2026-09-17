@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <unistd.h>
 
 #if !defined(TCP_NODELAY)
@@ -83,6 +84,29 @@ ArchSocket ArchNetworkBSD::newSocket(AddressFamily family, SocketType type)
     int on = 1;
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
+    if (type == SocketType::Stream) {
+      // best-effort latency tuning for interactive input. failures here
+      // must not break socket creation, so return values are ignored.
+      int bufSize = 256 * 1024;
+      setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bufSize, sizeof(bufSize));
+      setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bufSize, sizeof(bufSize));
+      int tos = IPTOS_LOWDELAY;
+      if (family == AddressFamily::INet) {
+        setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
+      } else if (family == AddressFamily::INet6) {
+        setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos));
+      }
+#if defined(__APPLE__)
+      // detect dead WiFi/roaming peers in ~1min instead of OS default hours.
+      // app-level keepalive still owns fast failure detection.
+      int keepIdle = 30;
+      int keepCnt = 3;
+      int keepIntvl = 10;
+      setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &keepIdle, sizeof(keepIdle));
+      setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keepCnt, sizeof(keepCnt));
+      setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepIntvl, sizeof(keepIntvl));
+#endif
+    }
   } catch (...) {
     close(fd);
     throw;

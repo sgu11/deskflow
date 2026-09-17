@@ -68,6 +68,23 @@ uint32_t PacketStreamFilter::read(void *buffer, uint32_t n)
 
 void PacketStreamFilter::write(const void *buffer, uint32_t count)
 {
+  // Small messages (the common case: moves, keys) go out as a single
+  // write so length + payload share one TLS record and one syscall.
+  // Bulk payloads (clipboard chunks) keep the two-write path.
+  static const uint32_t kCoalesceLimit = 256;
+  if (count <= kCoalesceLimit) {
+    uint8_t packed[kCoalesceLimit + 4];
+    packed[0] = (uint8_t)((count >> 24) & 0xff);
+    packed[1] = (uint8_t)((count >> 16) & 0xff);
+    packed[2] = (uint8_t)((count >> 8) & 0xff);
+    packed[3] = (uint8_t)(count & 0xff);
+    if (count != 0) {
+      memcpy(packed + 4, buffer, count);
+    }
+    getStream()->write(packed, count + 4);
+    return;
+  }
+
   // write the length of the payload
   uint8_t length[4];
   length[0] = (uint8_t)((count >> 24) & 0xff);
@@ -128,8 +145,8 @@ bool PacketStreamFilter::readMore()
   // note if we have whole packet
   bool wasReady = isReadyNoLock();
 
-  // read more data
-  char buffer[4096];
+  // read more data in larger chunks to cut syscalls during bursts
+  char buffer[16384];
   uint32_t n = getStream()->read(buffer, sizeof(buffer));
   while (n > 0) {
     m_buffer.write(buffer, n);

@@ -300,7 +300,7 @@ void TCPSocket::init()
 
 TCPSocket::JobResult TCPSocket::doRead()
 {
-  uint8_t buffer[4096];
+  uint8_t buffer[16384];
   memset(buffer, 0, sizeof(buffer));
   size_t bytesRead = 0;
 

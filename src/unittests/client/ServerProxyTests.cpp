@@ -79,8 +79,14 @@ public:
     return static_cast<uint32_t>(bytesToRead);
   }
 
-  void write(const void *, uint32_t) override
+  void write(const void *buffer, uint32_t size) override
   {
+    m_written.append(static_cast<const char *>(buffer), size);
+  }
+
+  const std::string &written() const
+  {
+    return m_written;
   }
 
   void flush() override
@@ -117,6 +123,7 @@ public:
 
 private:
   std::deque<std::string> m_chunks;
+  std::string m_written;
   bool m_inputShutdown = false;
 };
 
@@ -244,6 +251,11 @@ public:
   {
     return parseHandshakeMessage(code) == ConnectionResult::Disconnect;
   }
+
+  bool parseMessageReturnsOkay(const uint8_t *code)
+  {
+    return parseMessage(code) == ConnectionResult::Okay;
+  }
 };
 
 Client *undereferenceableClient()
@@ -326,6 +338,22 @@ void ServerProxyTests::parseHandshakeMessage_protocolError_queuesRefusalRequest(
   QVERIFY(request->kind() == Client::DisconnectRequest::Kind::Refuse);
   QVERIFY(request->refusalReason() == deskflow::core::ConnectionRefusal::ProtocolError);
   QCOMPARE(QString::fromUtf8(request->message()), QStringLiteral("server reported a protocol error"));
+}
+
+void ServerProxyTests::parseMessage_burst_repliesToEveryMessage()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  TestServerProxy proxy(undereferenceableClient(), &stream, &events);
+  std::string expected;
+
+  // No sleeps or further input should be needed to acknowledge the final
+  // message of a burst, even when messages arrive less than 50ms apart.
+  for (int i = 0; i < 32; ++i) {
+    QVERIFY(proxy.parseMessageReturnsOkay(reinterpret_cast<const uint8_t *>(kMsgCNoop)));
+    expected.append(kMsgCNoop, 4);
+    QCOMPARE(stream.written(), expected);
+  }
 }
 
 QTEST_MAIN(ServerProxyTests)

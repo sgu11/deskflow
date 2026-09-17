@@ -45,6 +45,7 @@ if(WIN32)
     MSWindowsEventQueueBuffer.h
     MSWindowsHook.cpp
     MSWindowsHook.h
+    MSWindowsKeyRouting.h
     MSWindowsKeyState.cpp
     MSWindowsKeyState.h
     MSWindowsPowerManager.cpp
@@ -81,6 +82,7 @@ elseif(APPLE)
     OSXClipboardUTF8Converter.h
     OSXClipboardUTF16Converter.cpp
     OSXClipboardUTF16Converter.h
+    OSXCursorController.h
     OSXCocoaApp.h
     OSXCocoaApp.m
     OSXEventQueueBuffer.cpp
