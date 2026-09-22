@@ -11,12 +11,7 @@
 #import "base/Log.h"
 #import "platform/OSXScreenSaverUtil.h"
 
-#import <string.h>
-#import <sys/sysctl.h>
-
-// TODO: upgrade deprecated function usage in these functions.
-void getProcessSerialNumber(const char *name, ProcessSerialNumber &psn);
-bool isScreenSaverEngine(const ProcessSerialNumber &psn);
+#include <CoreGraphics/CGSession.h>
 
 //
 // OSXScreenSaver
@@ -29,31 +24,11 @@ OSXScreenSaver::OSXScreenSaver(IEventQueue *events, void *eventTarget)
 {
   m_autoReleasePool = screenSaverUtilCreatePool();
   m_screenSaverController = screenSaverUtilCreateController();
-
-  // install launch/termination event handlers
-  EventTypeSpec launchEventTypes[2];
-  launchEventTypes[0].eventClass = kEventClassApplication;
-  launchEventTypes[0].eventKind = kEventAppLaunched;
-  launchEventTypes[1].eventClass = kEventClassApplication;
-  launchEventTypes[1].eventKind = kEventAppTerminated;
-
-  EventHandlerUPP launchTerminationEventHandler = NewEventHandlerUPP(launchTerminationCallback);
-  InstallApplicationEventHandler(
-      launchTerminationEventHandler, 2, launchEventTypes, this, &m_launchTerminationEventHandlerRef
-  );
-  DisposeEventHandlerUPP(launchTerminationEventHandler);
-
-  m_screenSaverPSN.highLongOfPSN = 0;
-  m_screenSaverPSN.lowLongOfPSN = 0;
-
-  if (isActive()) {
-    getProcessSerialNumber("ScreenSaverEngine", m_screenSaverPSN);
-  }
 }
 
 OSXScreenSaver::~OSXScreenSaver()
 {
-  RemoveEventHandler(m_launchTerminationEventHandlerRef);
+  watchLock(false);
   //    screenSaverUtilReleaseController(m_screenSaverController);
   screenSaverUtilReleasePool(m_autoReleasePool);
 }
@@ -85,89 +60,40 @@ bool OSXScreenSaver::isActive() const
   return (screenSaverUtilIsActive(m_screenSaverController) != 0);
 }
 
-void OSXScreenSaver::processLaunched(ProcessSerialNumber psn)
+void OSXScreenSaver::watchLock(bool notify)
 {
-  if (isScreenSaverEngine(psn)) {
-    m_screenSaverPSN = psn;
-    LOG_VERBOSE("screen saver engine launched, enabled=%d", m_enabled);
-    if (m_enabled) {
-      m_events->addEvent(Event(EventTypes::PrimaryScreenSaverActivated, m_eventTarget));
-    }
+  if (m_lockTimer != nullptr) {
+    m_events->removeHandler(EventTypes::Timer, m_lockTimer);
+    m_events->deleteTimer(m_lockTimer);
+    m_lockTimer = nullptr;
+  }
+  m_locked = false;
+  if (notify) {
+    // Poll on the core event thread, including when started while locked.
+    // ScreenSaverEngine lifetime does not represent modern macOS locking.
+    m_lockTimer = m_events->newTimer(0.25, nullptr);
+    m_events->addHandler(EventTypes::Timer, m_lockTimer, [this](const auto &) { checkLock(); });
   }
 }
 
-void OSXScreenSaver::processTerminated(ProcessSerialNumber psn)
+void OSXScreenSaver::checkLock()
 {
-  if (m_screenSaverPSN.highLongOfPSN == psn.highLongOfPSN && m_screenSaverPSN.lowLongOfPSN == psn.lowLongOfPSN) {
-    LOG_VERBOSE("screen saver engine terminated, enabled=%d", m_enabled);
-    if (m_enabled) {
-      m_events->addEvent(Event(EventTypes::PrimaryScreenSaverDeactivated, m_eventTarget));
-    }
-
-    m_screenSaverPSN.highLongOfPSN = 0;
-    m_screenSaverPSN.lowLongOfPSN = 0;
+  const auto session = CGSessionCopyCurrentDictionary();
+  if (session == nullptr) {
+    // Loss of the Quartz session is not evidence of an unlock.
+    return;
   }
-}
-
-pascal OSStatus
-OSXScreenSaver::launchTerminationCallback(EventHandlerCallRef nextHandler, EventRef theEvent, void *userData)
-{
-  OSStatus result;
-  ProcessSerialNumber psn;
-  EventParamType actualType;
-  ByteCount actualSize;
-
-  result = GetEventParameter(
-      theEvent, kEventParamProcessID, typeProcessSerialNumber, &actualType, sizeof(psn), &actualSize, &psn
+  // macOS omits this key while unlocked. It is not a public SDK constant;
+  // native lock/unlock acceptance is required when upgrading macOS.
+  const auto value = CFDictionaryGetValue(session, CFSTR("CGSSessionScreenIsLocked"));
+  const bool locked = value != nullptr && CFEqual(value, kCFBooleanTrue);
+  CFRelease(session);
+  if (locked == m_locked) {
+    return;
+  }
+  m_locked = locked;
+  LOG_INFO("macOS session %s; synchronizing clients", locked ? "locked" : "unlocked");
+  m_events->addEvent(
+      Event(locked ? EventTypes::PrimaryScreenSaverActivated : EventTypes::PrimaryScreenSaverDeactivated, m_eventTarget)
   );
-
-  if ((result == noErr) && (actualSize > 0) && (actualType == typeProcessSerialNumber)) {
-    OSXScreenSaver *screenSaver = (OSXScreenSaver *)userData;
-    uint32_t eventKind = GetEventKind(theEvent);
-    if (eventKind == kEventAppLaunched) {
-      screenSaver->processLaunched(psn);
-    } else if (eventKind == kEventAppTerminated) {
-      screenSaver->processTerminated(psn);
-    }
-  }
-  return (CallNextEventHandler(nextHandler, theEvent));
 }
-
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-
-void getProcessSerialNumber(const char *name, ProcessSerialNumber &psn)
-{
-  ProcessInfoRec procInfo;
-  Str31 procName; // pascal string. first byte holds length.
-  memset(&procInfo, 0, sizeof(procInfo));
-  procInfo.processName = procName;
-  procInfo.processInfoLength = sizeof(ProcessInfoRec);
-
-  ProcessSerialNumber checkPsn;
-  OSErr err = GetNextProcess(&checkPsn);
-  while (err == 0) {
-    memset(procName, 0, sizeof(procName));
-    err = GetProcessInformation(&checkPsn, &procInfo);
-    if (err != 0) {
-      break;
-    }
-    if (strcmp(name, (const char *)&procName[1]) == 0) {
-      psn = checkPsn;
-      break;
-    }
-    err = GetNextProcess(&checkPsn);
-  }
-}
-
-bool isScreenSaverEngine(const ProcessSerialNumber &psn)
-{
-  CFStringRef processName = nullptr;
-  OSStatus err = CopyProcessName(&psn, &processName);
-  const bool result = (err == 0 && CFEqual(CFSTR("ScreenSaverEngine"), processName));
-  if (processName) {
-    CFRelease(processName);
-  }
-  return result;
-}
-
-#pragma GCC diagnostic error "-Wdeprecated-declarations"

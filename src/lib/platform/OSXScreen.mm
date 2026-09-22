@@ -948,6 +948,7 @@ void OSXScreen::checkClipboards()
 void OSXScreen::openScreensaver(bool notify)
 {
   m_screensaverNotify = notify;
+  m_screensaver->watchLock(notify);
   if (!m_screensaverNotify) {
     m_screensaver->disable();
   }
@@ -955,6 +956,7 @@ void OSXScreen::openScreensaver(bool notify)
 
 void OSXScreen::closeScreensaver()
 {
+  m_screensaver->watchLock(false);
   if (!m_screensaverNotify) {
     m_screensaver->enable();
   }

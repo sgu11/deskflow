@@ -9,9 +9,8 @@
 
 #include "deskflow/IScreenSaver.h"
 
-#include <Carbon/Carbon.h>
-
 class IEventQueue;
+class EventQueueTimer;
 
 //! OSX screen saver implementation
 class OSXScreenSaver : public IScreenSaver
@@ -19,6 +18,9 @@ class OSXScreenSaver : public IScreenSaver
 public:
   OSXScreenSaver(IEventQueue *events, void *eventTarget);
   ~OSXScreenSaver();
+
+  // Monitor session locking on the server. Clients do not publish lock state.
+  void watchLock(bool notify);
 
   // IScreenSaver overrides
   void enable() override;
@@ -28,10 +30,7 @@ public:
   bool isActive() const override;
 
 private:
-  void processLaunched(ProcessSerialNumber psn);
-  void processTerminated(ProcessSerialNumber psn);
-
-  static pascal OSStatus launchTerminationCallback(EventHandlerCallRef nextHandler, EventRef theEvent, void *userData);
+  void checkLock();
 
 private:
   // the target for the events we generate
@@ -40,7 +39,7 @@ private:
   bool m_enabled;
   void *m_screenSaverController;
   void *m_autoReleasePool;
-  EventHandlerRef m_launchTerminationEventHandlerRef;
-  ProcessSerialNumber m_screenSaverPSN;
+  EventQueueTimer *m_lockTimer = nullptr;
+  bool m_locked = false;
   IEventQueue *m_events;
 };

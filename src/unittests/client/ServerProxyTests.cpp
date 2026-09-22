@@ -252,9 +252,9 @@ public:
     return parseHandshakeMessage(code) == ConnectionResult::Disconnect;
   }
 
-  bool parseMessageReturnsOkay(const uint8_t *code)
+  bool handleMessageReturnsOkay(const uint8_t *code)
   {
-    return parseMessage(code) == ConnectionResult::Okay;
+    return handleMessage(code) == ConnectionResult::Okay;
   }
 };
 
@@ -340,7 +340,7 @@ void ServerProxyTests::parseHandshakeMessage_protocolError_queuesRefusalRequest(
   QCOMPARE(QString::fromUtf8(request->message()), QStringLiteral("server reported a protocol error"));
 }
 
-void ServerProxyTests::parseMessage_burst_repliesToEveryMessage()
+void ServerProxyTests::handleMessage_burst_repliesToEveryMessage()
 {
   RecordingEventQueue events;
   FakeStream stream;
@@ -350,7 +350,7 @@ void ServerProxyTests::parseMessage_burst_repliesToEveryMessage()
   // No sleeps or further input should be needed to acknowledge the final
   // message of a burst, even when messages arrive less than 50ms apart.
   for (int i = 0; i < 32; ++i) {
-    QVERIFY(proxy.parseMessageReturnsOkay(reinterpret_cast<const uint8_t *>(kMsgCNoop)));
+    QVERIFY(proxy.handleMessageReturnsOkay(reinterpret_cast<const uint8_t *>(kMsgCNoop)));
     expected.append(kMsgCNoop, 4);
     QCOMPARE(stream.written(), expected);
   }

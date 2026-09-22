@@ -1481,6 +1481,9 @@ void Server::onClipboardChanged(const BaseClientProxy *sender, ClipboardID id, u
 
 void Server::onScreensaver(bool activated)
 {
+  if (activated == (m_activeSaver != nullptr)) {
+    return;
+  }
   LOG_DEBUG("onScreenSaver %s", activated ? "activated" : "deactivated");
 
   if (activated) {
@@ -2056,7 +2059,9 @@ void Server::forceLeaveClient(const BaseClientProxy *client)
   // then we can't switch back to it when the screen saver
   // deactivates.
   if (m_activeSaver == client) {
-    m_activeSaver = nullptr;
+    // Preserve the active state so reconnecting clients are also locked.
+    // The disconnected screen can no longer be the return destination.
+    m_activeSaver = m_primaryClient;
   }
 
   // tell primary client about the active sides
