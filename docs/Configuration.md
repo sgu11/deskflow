@@ -138,7 +138,7 @@ This section contains options used when in server mode it will begin with `[serv
 
 |Option              |    Valid Values   |Description|
 |:-------------------|:-----------------:|:-----------|
-| clipboardSize      | int > 0           | Deskflow will send a maximum of `N` megabytes of clipboard data to another computer when the mouse transitions to that computer.|
+| clipboardSize      | int > 0           | Deskflow will send a maximum of `N` megabytes of clipboard data to another computer when the mouse transitions to that computer. Clients use the server's value for both sending and receiving.|
 | defaultLockToComputerState| `true` or `false` | When this is true the cursor is locked to the new computer when switching (default: false)|
 | disableLockToComputer| `true` or `false` | If false pressing scroll lock will toggle your cursor to be locked to current computer. (default: false) |
 | enableClipboard    | `true` or `false` | When `true` the clipboard will be shared with all clients If set to ''true'' then clipboard shared and the ''clipboardSharingSize'' setting will be used. If set to false, then clipboard sharing will be disabled and the the ''clipboardSharingSize'' setting will be ignored.|
@@ -162,10 +162,26 @@ This section contains options used when in server mode it will begin with `[serv
 
 Each screen will have a section where its configuration will be stored, if the screen was named "foo" the section will be named `[screen_foo]`
 
-|Option              |    Valid Values    |Description|
-|:-------------------|:------------------:|:-----------|
-| aliases            | Comma separated list of hostnames | Names here will be used as alternatives for the computer. Names must be valid hostnames. |
-
+|Option                  |    Valid Values   |Description|
+|:-----------------------|:-----------------:|:-----------|
+| aliases                | Comma separated list of hostnames | Names here will be used as alternatives for the computer. Names must be valid hostnames. |
+| name                   | Valid hostname    | The name of the client. |
+| halfDuplexCapsLock     | `true` or `false` | This computer has a ''Caps Lock'' key that doesn't report a press and a release event when the user presses it but instead reports a press event when it's turned on and a release event when it's turned off. If ''Caps Lock'' acts strangely on all computers then you may need to set this option to true on the server. If it acts strangely on one computer then that computer may need the option set to true.|
+| halfDuplexNumLock      | `true` or `false` | This computer has a ''Num Lock'' key that doesn't report a press and a release event when the user presses it but instead reports a press event when it's turned on and a release event when it's turned off. If ''Num Lock'' acts strangely on all computers then you may need to set this option to true on the server. If it acts strangely on one computer then that computer may need the option set to true.|
+| halfDuplexScrollLock   | `true` or `false` | This computer has a ''Scroll Lock'' key that doesn't report a press and a release event when the user presses it but instead reports a press event when it's turned on and a release event when it's turned off. If ''Scroll Lock'' acts strangely on all computers then you may need to set this option to true on the server. If it acts strangely on one computer then that computer may need the option set to true.|
+| modifierAlt             | `shift` `ctrl` `alt` `altgr` `meta` `super` or  `none` | Map the server's alt modifer to different key on this computer|
+| modifierAltGr           | `shift` `ctrl` `alt` `altgr` `meta` `super` or  `none` | Map the server's altgr modifer to different key on this computer|
+| modifierCtrl            | `shift` `ctrl` `alt` `altgr` `meta` `super` or  `none` | Map the server's ctrl modifer to different key on this computer|
+| modifierMeta            | `shift` `ctrl` `alt` `altgr` `meta` `super` or  `none` | Map the server's meta modifer to different key on this computer|
+| modifierShift           | `shift` `ctrl` `alt` `altgr` `meta` `super` or  `none` | Map the server's shift modifer to different key on this computer|
+| modifierSuper           | `shift` `ctrl` `alt` `altgr` `meta` `super` or  `none` | Map the server's super modifer to different key on thist computer|
+| switchCornerSize       | integer (N)       | Sets the size of all corners in pixels. The cursor must be within `N` pixels of the corner to be considered to be in the corner.|
+| switchCornerTopLeft    | `true` or `false` | Deskflow won't switch computers when the mouse reaches the edge of the computer if it includes this corner. The size of the corner is given by the `switchCornerSize` option. |
+| switchCornerTopRight   | `true` or `false` | Deskflow won't switch computers when the mouse reaches the edge of the computer if it includes this corner. The size of the corner is given by the `switchCornerSize` option. |
+| switchCornerBottomLeft | `true` or `false` | Deskflow won't switch computers when the mouse reaches the edge of the computer if it includes this corner. The size of the corner is given by the `switchCornerSize` option. |
+| switchCornerBottomRight| `true` or `false` | Deskflow won't switch computers when the mouse reaches the edge of the computer if it includes this corner. The size of the corner is given by the `switchCornerSize` option. |
+| xtestIsXineramaUnaware | `true` or `false` | This option works around a bug in the XTest extension when used in combination with Xinerama. It affects X11 clients only. Not all versions of the XTest extension are aware of the Xinerama extension. As a result, they do not move the mouse correctly when using multiple Xinerama screens. This option is currently ''true'' by default. If you know your XTest extension is Xinerama aware then set this option to ''false''.|
+| weakX11Focus           | `true` or `false` | This X11 Client will not gain focus until an input event has been processed its screen |
 
 ### InternalConfig
 
@@ -189,25 +205,7 @@ hotkeys\1\keys\1\key=83
 hotkeys\1\keys\size=1
 hotkeys\size=1
 screens\1\name=
-screens\10\fixArray\1\fix=false
-screens\10\fixArray\2\fix=false
-screens\10\fixArray\3\fix=false
-screens\10\fixArray\4\fix=false
-screens\10\fixArray\size=4
-screens\10\modifierArray\1\modifier=0
-screens\10\modifierArray\2\modifier=1
-screens\10\modifierArray\3\modifier=2
-screens\10\modifierArray\4\modifier=3
-screens\10\modifierArray\5\modifier=4
-screens\10\modifierArray\6\modifier=5
-screens\10\modifierArray\size=6
 screens\10\name=null
-screens\10\switchCornerArray\1\switchCorner=false
-screens\10\switchCornerArray\2\switchCorner=false
-screens\10\switchCornerArray\3\switchCorner=false
-screens\10\switchCornerArray\4\switchCorner=false
-screens\10\switchCornerArray\size=4
-screens\10\switchCornerSize=0
 screens\11\name=
 screens\12\name=
 screens\13\name=
@@ -218,63 +216,9 @@ screens\3\name=
 screens\4\name=
 screens\5\name=
 screens\6\name=
-screens\7\fixArray\1\fix=false
-screens\7\fixArray\2\fix=false
-screens\7\fixArray\3\fix=false
-screens\7\fixArray\4\fix=false
-screens\7\fixArray\size=4
-screens\7\modifierArray\1\modifier=0
-screens\7\modifierArray\2\modifier=1
-screens\7\modifierArray\3\modifier=2
-screens\7\modifierArray\4\modifier=3
-screens\7\modifierArray\5\modifier=4
-screens\7\modifierArray\6\modifier=5
-screens\7\modifierArray\size=6
 screens\7\name=void
-screens\7\switchCornerArray\1\switchCorner=false
-screens\7\switchCornerArray\2\switchCorner=false
-screens\7\switchCornerArray\3\switchCorner=false
-screens\7\switchCornerArray\4\switchCorner=false
-screens\7\switchCornerArray\size=4
-screens\7\switchCornerSize=0
-screens\8\fixArray\1\fix=false
-screens\8\fixArray\2\fix=false
-screens\8\fixArray\3\fix=false
-screens\8\fixArray\4\fix=false
-screens\8\fixArray\size=4
-screens\8\modifierArray\1\modifier=0
-screens\8\modifierArray\2\modifier=1
-screens\8\modifierArray\3\modifier=2
-screens\8\modifierArray\4\modifier=3
-screens\8\modifierArray\5\modifier=4
-screens\8\modifierArray\6\modifier=5
-screens\8\modifierArray\size=6
 screens\8\name=chris-Precision-5570
-screens\8\switchCornerArray\1\switchCorner=false
-screens\8\switchCornerArray\2\switchCorner=false
-screens\8\switchCornerArray\3\switchCorner=false
-screens\8\switchCornerArray\4\switchCorner=false
-screens\8\switchCornerArray\size=4
-screens\8\switchCornerSize=0
-screens\9\fixArray\1\fix=false
-screens\9\fixArray\2\fix=false
-screens\9\fixArray\3\fix=false
-screens\9\fixArray\4\fix=false
-screens\9\fixArray\size=4
-screens\9\modifierArray\1\modifier=0
-screens\9\modifierArray\2\modifier=1
-screens\9\modifierArray\3\modifier=2
-screens\9\modifierArray\4\modifier=3
-screens\9\modifierArray\5\modifier=4
-screens\9\modifierArray\6\modifier=5
-screens\9\modifierArray\size=6
 screens\9\name=abyss.lan
-screens\9\switchCornerArray\1\switchCorner=false
-screens\9\switchCornerArray\2\switchCorner=false
-screens\9\switchCornerArray\3\switchCorner=false
-screens\9\switchCornerArray\4\switchCorner=false
-screens\9\switchCornerArray\size=4
-screens\9\switchCornerSize=0
 screens\size=15
 ```
 
@@ -292,47 +236,10 @@ end
 
 Comments are introduced by ''#'' and continue to the end of the line. ''name'' must be one of the following:
 
-* ''screens''
 * ''links''
 * ''options''
 
 The file is parsed top to bottom and names cannot be used before they've been defined in the `screens` or as an alias in the general config. So the `links` must appear after the `screens`.
-
-### The screens section
-
-''args'' is a list of computer names, one name per line, each followed by a colon. Names are arbitrary strings but they must be unique. The hostname of each computer is recommended. (This is the computer's network name on win32 and the name reported by the program hostname on Unix and OS X. Note that OS X may append .local to the name you gave your computer; e.g. somehost.local.) There must be a computer name for the server and each client. Each computer can specify a number of options. Options have the form name = value and are listed one per line after the computer name.
-
-```
-section: screens
-	moe:
-	larry:
-		halfDuplexCapsLock = true
-		halfDuplexNumLock = true
-	curly:
-		meta = alt
-end
-```
-
-This declares three computers named ''moe'', ''larry'', and ''curly''. Computer ''larry'' has half-duplex ''Caps Lock'' and ''Num Lock'' keys (see below) and computer ''curly'' converts the ''Meta'' modifier key to the ''Alt'' modifier key.
-
-#### screen options
-
-A computer can have the following options:
-
-|Option | Valid Values| Description|
-|:----------|:-----------:|:-----------|
-|halfDuplexCapsLock| `true` or `false` | This computer has a ''Caps Lock'' key that doesn't report a press and a release event when the user presses it but instead reports a press event when it's turned on and a release event when it's turned off. If ''Caps Lock'' acts strangely on all computers then you may need to set this option to true on the server. If it acts strangely on one computer then that computer may need the option set to true.|
-|halfDuplexNumLock | `true` or `false` | This computer has a ''Num Lock'' key that doesn't report a press and a release event when the user presses it but instead reports a press event when it's turned on and a release event when it's turned off. If ''Num Lock'' acts strangely on all computers then you may need to set this option to true on the server. If it acts strangely on one computer then that computer may need the option set to true.|
-|halfDuplexScrollLock| `true` or `false`| This computer has a ''Scroll Lock'' key that doesn't report a press and a release event when the user presses it but instead reports a press event when it's turned on and a release event when it's turned off. If ''Scroll Lock'' acts strangely on all computers then you may need to set this option to true on the server. If it acts strangely on one computer then that computer may need the option set to true.|
-|xtestIsXineramaUnaware| `true` or `false`| This option works around a bug in the XTest extension when used in combination with Xinerama. It affects X11 clients only. Not all versions of the XTest extension are aware of the Xinerama extension. As a result, they do not move the mouse correctly when using multiple Xinerama screens. This option is currently ''true'' by default. If you know your XTest extension is Xinerama aware then set this option to ''false''.|
-|preserveFocus| `true` or `false` | When true don't drop focus when switching computers|
-|switchCorners | none top-left top-right bottom-left bottom-right left right top bottom all | Deskflow won't switch computers when the mouse reaches the edge of the computer if it's in a listed corner. The size of all corners is given by the `switchCornerSize` option. The first name in the list is one of the above names and defines the initial set of corners. Subsequent names are prefixed with + or - to add the corner to or remove the corner from the set, respectively. For example: `all -left +top-left` starts will all corners, removes the left corners (top and bottom) then adds the top-left back in, resulting in the top-left, bottom-left and bottom-right corners.|
-|switchCornerSize | integer (N) | Sets the size of all corners in pixels. The cursor must be within `N` pixels of the corner to be considered to be in the corner.|
-|shift | shift ctrl alt meta super none | Map the server's shift modifer to different key on a client computer|
-|ctrl  | shift ctrl alt meta super none | Map the server's ctrl modifer to different key on a client computer|
-|alt | shift ctrl alt meta super none | Map the server's alt modifer to different key on a client computer|
-|meta|  shift ctrl alt meta super none | Map the server's meta modifer to different key on a client computer|
-|super|  shift ctrl alt meta super none | Map the server's super modifer to different key on a client computer|
 
 ### links secion
 

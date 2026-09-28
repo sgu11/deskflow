@@ -1,3 +1,34 @@
+# Upstream integration, 2026-09-28
+
+Merged upstream master at `be5c51405` (35 commits after the previous sync)
+into this public branch. Incoming changes
+include screen-settings refactoring, clipboard size limits, queued GUI IPC,
+keyboard language synchronization defaulting to off, macOS F17-F20 mapping,
+and client display wake on entry.
+
+The only conflict was `Arch::time()`. Preserve the fork's direct
+`std::chrono::duration<double>` conversion: upstream's microsecond truncation
+failed the existing `clock_preservesFractionalSeconds` regression check.
+The original conversion passes both that check and upstream's new ArchTests.
+The fork's IME, cursor/Dock, lock synchronization and socket batching changes
+remain present.
+
+## Verification for this merge
+
+The macOS arm64 GUI, core and tests built with Qt 6.11.2 using the CMake
+commands below. All 29 non-injecting CTest groups passed, along with the
+read-only `mapModifiersFromOSX_OSXMask` case. The built core's `--version`
+command also succeeded. `git diff --check` passed.
+
+`OSXClipboardTests` and the remaining `OSXKeyStateTests` cases were excluded
+because they change the active desktop. Linux/X11 protocol E2E, native
+Wayland, Windows, physical IME/Dock crossing and display-wake acceptance were
+not rerun. The previous Linux results below describe the September 22 tree,
+not this merge. No installed app or remote service was updated.
+
+The public source and tests match the verified macOS source tree. Public
+documentation omits private operational details.
+
 # Upstream integration, 2026-09-22
 
 Merged `deskflow/deskflow` master at

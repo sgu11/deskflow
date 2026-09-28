@@ -735,6 +735,34 @@ Inoltre, verifica di poter %1 il file di configurazione del server: %2</translat
         <source>%1 is already running</source>
         <translation>%1 è già in esecuzione</translation>
     </message>
+    <message>
+        <source>Alt</source>
+        <translation type="unfinished">Alt</translation>
+    </message>
+    <message>
+        <source>AltGr</source>
+        <translation type="unfinished">AltGr</translation>
+    </message>
+    <message>
+        <source>Ctrl</source>
+        <translation type="unfinished">Ctrl</translation>
+    </message>
+    <message>
+        <source>Meta</source>
+        <translation type="unfinished">Meta</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished">Nessuno</translation>
+    </message>
+    <message>
+        <source>Shift</source>
+        <translation type="unfinished">Shift</translation>
+    </message>
+    <message>
+        <source>Super</source>
+        <translation type="unfinished">Super</translation>
+    </message>
 </context>
 <context>
     <name>ScreenSettingsDialog</name>
@@ -877,6 +905,14 @@ Inoltre, verifica di poter %1 il file di configurazione del server: %2</translat
     <message>
         <source>Alt &amp;Gr</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Weaken X11 Focus</source>
+        <translation type="unfinished">Indebolisci la messa a fuoco di X11</translation>
+    </message>
+    <message>
+        <source>X11 screens Only, When enabled the client will not give focus to its focused window as soon as the client is switched to. This can help prevent unwanted focus stealing with some X11 setups.</source>
+        <translation type="unfinished">Solo per schermi X11: se questa opzione è abilitata, il client non assegnerà il focus alla finestra attiva nel momento in cui si passa al client stesso. Ciò può aiutare a prevenire il furto di focus indesiderato con alcune configurazioni X11.</translation>
     </message>
 </context>
 <context>

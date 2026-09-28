@@ -735,6 +735,34 @@ Además, verifique que puede %1 el archivo de configuración del servidor: %2</t
         <source>%1 is already running</source>
         <translation type="unfinished">%1 ya se está ejecutando</translation>
     </message>
+    <message>
+        <source>Alt</source>
+        <translation type="unfinished">Alt</translation>
+    </message>
+    <message>
+        <source>AltGr</source>
+        <translation type="unfinished">AltGr</translation>
+    </message>
+    <message>
+        <source>Ctrl</source>
+        <translation type="unfinished">Ctrl</translation>
+    </message>
+    <message>
+        <source>Meta</source>
+        <translation type="unfinished">Meta</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished">Ninguno</translation>
+    </message>
+    <message>
+        <source>Shift</source>
+        <translation type="unfinished">Shift</translation>
+    </message>
+    <message>
+        <source>Super</source>
+        <translation type="unfinished">Súper</translation>
+    </message>
 </context>
 <context>
     <name>ScreenSettingsDialog</name>
@@ -877,6 +905,14 @@ Además, verifique que puede %1 el archivo de configuración del servidor: %2</t
     <message>
         <source>Alt &amp;Gr</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Weaken X11 Focus</source>
+        <translation type="unfinished">Debilitar el foco de X11</translation>
+    </message>
+    <message>
+        <source>X11 screens Only, When enabled the client will not give focus to its focused window as soon as the client is switched to. This can help prevent unwanted focus stealing with some X11 setups.</source>
+        <translation type="unfinished">Solo para pantallas X11: cuando esta opción está habilitada, el cliente no otorgará el foco a su ventana activa inmediatamente después de cambiar a él. Esto puede ayudar a evitar el robo de foco no deseado en algunas configuraciones de X11.</translation>
     </message>
 </context>
 <context>

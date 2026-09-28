@@ -1,6 +1,6 @@
 /*
  * Deskflow -- mouse and keyboard sharing utility
- * SPDX-FileCopyrightText: (C) 2025 Chris Rizzitello <sithlord48@gmail.com>
+ * SPDX-FileCopyrightText: (C) 2025 - 2026 Chris Rizzitello <sithlord48@gmail.com>
  * SPDX-FileCopyrightText: (C) 2012 Synergy App Ltd
  * SPDX-FileCopyrightText: (C) 2008 Volker Lanz <vl@fidra.de>
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
@@ -10,7 +10,7 @@
 #include "config/ScreenConfig.h"
 #include <common/Settings.h>
 
-using enum ScreenConfig::Modifier;
+using enum KeyboardModifier;
 using enum ScreenConfig::SwitchCorner;
 using enum ScreenConfig::Fix;
 
@@ -27,56 +27,87 @@ void Screen::loadSettings(QSettingsProxy &settings)
   if (name.isEmpty())
     return;
 
-  setSwitchCornerSize(settings.value("switchCornerSize").toInt());
+  setModifier(Alt, modifierValueFromString(Settings::value(Settings::Screen::ModifierAlt.arg(name)).toString()));
+  setModifier(AltGr, modifierValueFromString(Settings::value(Settings::Screen::ModifierAltGr.arg(name)).toString()));
+  setModifier(Ctrl, modifierValueFromString(Settings::value(Settings::Screen::ModifierCtrl.arg(name)).toString()));
+  setModifier(Meta, modifierValueFromString(Settings::value(Settings::Screen::ModifierMeta.arg(name)).toString()));
+  setModifier(Shift, modifierValueFromString(Settings::value(Settings::Screen::ModifierShift.arg(name)).toString()));
+  setModifier(Super, modifierValueFromString(Settings::value(Settings::Screen::ModifierSuper.arg(name)).toString()));
 
-  readSettings(settings, modifiers(), "modifier", static_cast<int>(DefaultMod), static_cast<int>(NumModifiers));
-  readSettings(settings, switchCorners(), "switchCorner", false, static_cast<int>(NumSwitchCorners));
-  readSettings(settings, fixes(), "fix", 0, static_cast<int>(NumFixes));
+  setSwitchCornerSize(Settings::value(Settings::Screen::SwitchCornerSize.arg(name)).toInt());
+
+  m_SwitchCorners[static_cast<int>(TopLeft)] =
+      Settings::value(Settings::Screen::SwitchCornerTopLeft.arg(name)).toBool();
+  m_SwitchCorners[static_cast<int>(TopRight)] =
+      Settings::value(Settings::Screen::SwitchCornerTopRight.arg(name)).toBool();
+  m_SwitchCorners[static_cast<int>(BottomLeft)] =
+      Settings::value(Settings::Screen::SwitchCornerBottomLeft.arg(name)).toBool();
+  m_SwitchCorners[static_cast<int>(BottomRight)] =
+      Settings::value(Settings::Screen::SwitchCornerBottomRight.arg(name)).toBool();
+
+  m_Fixes[static_cast<int>(CapsLock)] = Settings::value(Settings::Screen::HalfDuplexCapsLock.arg(name)).toBool();
+  m_Fixes[static_cast<int>(NumLock)] = Settings::value(Settings::Screen::HalfDuplexNumLock.arg(name)).toBool();
+  m_Fixes[static_cast<int>(ScrollLock)] = Settings::value(Settings::Screen::HalfDuplexScrollLock.arg(name)).toBool();
+  m_Fixes[static_cast<int>(XTest)] = Settings::value(Settings::Screen::XtestIsXineramaUnaware.arg(name)).toBool();
 
   m_Aliases = Settings::value(Settings::Screen::Aliases.arg(name)).toStringList();
 }
 
 void Screen::saveSettings(QSettingsProxy &settings) const
 {
-
   const auto screenName = name();
   settings.setValue("name", screenName);
 
   if (screenName.isEmpty())
     return;
 
+  Settings::setValue(Settings::Screen::Name.arg(screenName), screenName);
   Settings::setValue(Settings::Screen::Aliases.arg(screenName), m_Aliases);
+  Settings::setValue(Settings::Screen::HalfDuplexCapsLock.arg(screenName), m_Fixes[static_cast<int>(CapsLock)]);
+  Settings::setValue(Settings::Screen::HalfDuplexNumLock.arg(screenName), m_Fixes[static_cast<int>(NumLock)]);
+  Settings::setValue(Settings::Screen::HalfDuplexScrollLock.arg(screenName), m_Fixes[static_cast<int>(ScrollLock)]);
+  Settings::setValue(Settings::Screen::XtestIsXineramaUnaware.arg(screenName), m_Fixes[static_cast<int>(XTest)]);
+  Settings::setValue(Settings::Screen::SwitchCornerSize.arg(screenName), switchCornerSize());
+  Settings::setValue(Settings::Screen::SwitchCornerTopLeft.arg(screenName), m_SwitchCorners[static_cast<int>(TopLeft)]);
+  Settings::setValue(
+      Settings::Screen::SwitchCornerTopRight.arg(screenName), m_SwitchCorners[static_cast<int>(TopRight)]
+  );
+  Settings::setValue(
+      Settings::Screen::SwitchCornerBottomLeft.arg(screenName), m_SwitchCorners[static_cast<int>(BottomLeft)]
+  );
+  Settings::setValue(
+      Settings::Screen::SwitchCornerBottomRight.arg(screenName), m_SwitchCorners[static_cast<int>(BottomRight)]
+  );
 
-  settings.setValue("switchCornerSize", switchCornerSize());
-
-  writeSettings(settings, modifiers(), "modifier");
-  writeSettings(settings, switchCorners(), "switchCorner");
-  writeSettings(settings, fixes(), "fix");
+  Settings::setValue(
+      Settings::Screen::ModifierAlt.arg(screenName),
+      valueToKeyboardModifierOption(m_Modifiers.at(static_cast<qsizetype>(KeyboardModifier::Alt)))
+  );
+  Settings::setValue(
+      Settings::Screen::ModifierAltGr.arg(screenName),
+      valueToKeyboardModifierOption(m_Modifiers.at(static_cast<qsizetype>(KeyboardModifier::AltGr)))
+  );
+  Settings::setValue(
+      Settings::Screen::ModifierCtrl.arg(screenName),
+      valueToKeyboardModifierOption(m_Modifiers.at(static_cast<qsizetype>(KeyboardModifier::Ctrl)))
+  );
+  Settings::setValue(
+      Settings::Screen::ModifierMeta.arg(screenName),
+      valueToKeyboardModifierOption(m_Modifiers.at(static_cast<qsizetype>(KeyboardModifier::Meta)))
+  );
+  Settings::setValue(
+      Settings::Screen::ModifierShift.arg(screenName),
+      valueToKeyboardModifierOption(m_Modifiers.at(static_cast<qsizetype>(KeyboardModifier::Shift)))
+  );
+  Settings::setValue(
+      Settings::Screen::ModifierSuper.arg(screenName),
+      valueToKeyboardModifierOption(m_Modifiers.at(static_cast<qsizetype>(KeyboardModifier::Super)))
+  );
 }
 
 QString Screen::screensSection() const
 {
-  const auto lineTemplate = QStringLiteral("\t\t%1 = %2\n");
-
-  QString out = QStringLiteral("\t%1:\n").arg(name());
-  for (int i = 0; i < modifiers().size(); i++) {
-    if (modifier(i) != i)
-      out.append(lineTemplate.arg(modifierName(i), modifierName(modifier(i))));
-  }
-
-  for (int i = 0; i < fixes().size(); i++)
-    out.append(lineTemplate.arg(fixName(i), fixes().at(i) ? QStringLiteral("true") : QStringLiteral("false")));
-
-  auto corners = QStringLiteral("none");
-  for (int i = 0; i < switchCorners().size(); i++) {
-    if (switchCorners()[i])
-      corners.append(QStringLiteral(" +%1 ").arg(switchCornerName(i)));
-  }
-  out.append(lineTemplate.arg(QStringLiteral("switchCorners"), corners));
-
-  out.append(lineTemplate.arg(QStringLiteral("switchCornerSize"), QString::number(switchCornerSize())));
-
-  return out;
+  return QStringLiteral("\t%1:\n").arg(name());
 }
 
 bool Screen::operator==(const Screen &screen) const

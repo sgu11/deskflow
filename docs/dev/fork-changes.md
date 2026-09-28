@@ -1,7 +1,7 @@
 # Input robustness fork
 
 This branch integrates upstream through commit
-`49e6293a4d147d0829a5acead8f61dcbbc01afce`. It includes:
+`be5c51405`. It includes:
 
 - macOS server motion isolation, Dock hover dismissal, and balanced cursor hiding;
 - subsecond monotonic clock precision for short timers;
@@ -22,8 +22,13 @@ Wi-Fi performance, fix Korean composition, or resolve stuck modifiers.
 The Windows routing policy tests pass on macOS, alongside ServerProxyTests
 and KeyStateTests. A native Windows build and Korean type-3 keyboard acceptance
 are still required; the intermittent half-width Katakana symptom is not yet
-confirmed fixed. The merged source passed 28 non-injecting CTest groups on
-macOS arm64, 30 groups on Linux x86_64, and six protocol compatibility E2E cases.
+confirmed fixed. The September 28 source passed 29 non-injecting CTest groups
+on macOS arm64 and the read-only modifier mapping case. Linux and protocol E2E
+results in `upstream-sync.md` apply to the earlier September 22 revision.
 Native macOS-server/Waynergy-client testing confirmed normal round trips and
 almost immediate cursor/Dock cleanup. Exact-edge stops without further motion
 and other display arrangements still require acceptance.
+
+The September 28 update includes upstream screen-settings and clipboard fixes,
+macOS F17-F20 mapping and client display wake, plus an optional Print Screen
+setup helper documented in `macos-special-keys.md`.

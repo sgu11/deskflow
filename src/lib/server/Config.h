@@ -408,8 +408,6 @@ private:
   );
 
   void parseScreens(const ConfigReadContext &, const std::string_view &, std::set<std::string> &screens) const;
-  static const char *getOptionName(OptionID);
-  static std::string getOptionValue(OptionID, OptionValue);
 
 private:
   CellMap m_map;
@@ -438,12 +436,6 @@ public:
 
   bool operator!() const;
 
-  OptionValue parseBoolean(const std::string &) const;
-  OptionValue parseInt(const std::string &) const;
-  OptionValue parseModifierKey(const std::string &) const;
-  OptionValue parseCorner(const std::string &) const;
-  OptionValue parseCorners(const std::string &) const;
-  OptionValue parseProtocol(const std::string &) const;
   Config::Interval parseInterval(const ArgList &args) const;
   void parseNameWithArgs(
       const std::string &type, const std::string &line, const std::string &delim, std::string::size_type &index,
