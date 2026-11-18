@@ -13,9 +13,8 @@
 #include "base/Log.h"
 #include "base/SimpleEventQueueBuffer.h"
 #include "common/ExitCodes.h"
-#include "mt/Lock.h"
-#include "mt/Mutex.h"
 
+#include <chrono>
 #include <stdexcept>
 
 #if defined(__APPLE__)
@@ -33,7 +32,7 @@ static void interrupt(Arch::ThreadSignal, void *data)
 // EventQueue
 //
 
-EventQueue::EventQueue() : m_readyMutex(new Mutex), m_readyCondVar(new CondVar<bool>(m_readyMutex, false))
+EventQueue::EventQueue()
 {
   ARCH->setSignalHandler(Arch::ThreadSignal::Interrupt, &interrupt, this);
   ARCH->setSignalHandler(Arch::ThreadSignal::Terminate, &interrupt, this);
@@ -42,9 +41,6 @@ EventQueue::EventQueue() : m_readyMutex(new Mutex), m_readyCondVar(new CondVar<b
 
 EventQueue::~EventQueue()
 {
-  delete m_readyCondVar;
-  delete m_readyMutex;
-
   ARCH->setSignalHandler(Arch::ThreadSignal::Interrupt, nullptr, nullptr);
   ARCH->setSignalHandler(Arch::ThreadSignal::Terminate, nullptr, nullptr);
 }
@@ -53,17 +49,15 @@ int EventQueue::loop()
 {
   m_buffer->init();
   {
-    Lock lock(m_readyMutex);
-    *m_readyCondVar = true;
-    m_readyCondVar->signal();
+    std::scoped_lock lock{m_mutex};
+    while (!m_pending.empty()) {
+      addEventToBuffer(std::move(m_pending.front()));
+      m_pending.pop();
+    }
+    m_ready = true;
   }
+  m_readyCondition.notify_all();
   LOG_DEBUG("event queue is ready");
-  while (!m_pending.empty()) {
-    LOG_DEBUG("add pending events to buffer");
-    Event &event = m_pending.front();
-    addEventToBuffer(std::move(event));
-    m_pending.pop();
-  }
 
   Event event;
   getEvent(event);
@@ -205,17 +199,19 @@ void EventQueue::addEvent(Event &&event)
   if ((event.getFlags() & Event::EventFlags::DeliverImmediately) != 0) {
     dispatchEvent(event);
     Event::deleteData(event);
-  } else if (!(*m_readyCondVar)) {
-    m_pending.push(std::move(event));
-  } else {
+    return;
+  }
+
+  std::scoped_lock lock{m_mutex};
+  if (m_ready) {
     addEventToBuffer(std::move(event));
+  } else {
+    m_pending.push(std::move(event));
   }
 }
 
 void EventQueue::addEventToBuffer(Event &&event)
 {
-  std::scoped_lock lock{m_mutex};
-
   // store the event's data locally
   auto eventID = saveEvent(std::move(event));
 
@@ -417,13 +413,9 @@ void *EventQueue::getSystemTarget()
 
 void EventQueue::waitForReady() const
 {
-  double timeout = Arch::time() + 10;
-  Lock lock(m_readyMutex);
-
-  while (!m_readyCondVar->wait()) {
-    if (Arch::time() > timeout) {
-      throw std::runtime_error("event queue is not ready within 5 sec");
-    }
+  std::unique_lock lock{m_mutex};
+  if (!m_readyCondition.wait_for(lock, std::chrono::seconds(10), [this] { return m_ready; })) {
+    throw std::runtime_error("event queue is not ready within 10 sec");
   }
 }
 

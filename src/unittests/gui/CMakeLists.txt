@@ -10,3 +10,10 @@ create_test(
   SOURCE LoggerTests.cpp
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/gui"
 )
+
+create_test(
+  NAME IpcClientTests
+  DEPENDS gui
+  SOURCE IpcClientTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/gui"
+)

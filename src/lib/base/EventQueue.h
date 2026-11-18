@@ -11,8 +11,8 @@
 #include "base/IEventQueue.h"
 #include "base/PriorityQueue.h"
 #include "base/Stopwatch.h"
-#include "mt/CondVar.h"
 
+#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -56,7 +56,7 @@ private:
   Event removeEvent(uint32_t eventID);
   bool hasTimerExpired(Event &event);
   double getNextTimerTimeout() const;
-  void addEventToBuffer(Event &&event);
+  void addEventToBuffer(Event &&event); // Caller holds m_mutex.
 
   //!
   //! \brief processEvent Internal event proccessing
@@ -119,7 +119,7 @@ private:
   // event handlers
   HandlerTable m_handlers;
 
-  Mutex *m_readyMutex = nullptr;
-  CondVar<bool> *m_readyCondVar = nullptr;
+  mutable std::condition_variable m_readyCondition;
+  bool m_ready = false;
   std::queue<Event> m_pending;
 };

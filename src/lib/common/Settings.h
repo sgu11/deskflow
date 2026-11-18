@@ -43,6 +43,7 @@ public:
     inline static const auto XScrollScale = QStringLiteral("client/xScrollScale");
     inline static const auto LanguageSync = QStringLiteral("client/languageSync");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
+    inline static const auto RecentRemoteHosts = QStringLiteral("client/recentRemoteHosts");
     inline static const auto XdpClipboardRetried = QStringLiteral("client/xdpClipboardRetried");
     inline static const auto XdpRestoreToken = QStringLiteral("client/xdpRestoreToken");
   };
@@ -59,12 +60,9 @@ public:
     inline static const auto UseHooks = QStringLiteral("core/useHooks");
     inline static const auto Language = QStringLiteral("core/language");
     inline static const auto EnableEnterCommand = QStringLiteral("core/enableEnterCommand");
-    inline static const auto ScreenEnterCommand = QStringLiteral("core/enterCommand");
+    inline static const auto ComputerEnterCommand = QStringLiteral("core/enterCommand");
     inline static const auto EnableExitCommand = QStringLiteral("core/enableExitCommand");
-    inline static const auto ScreenExitCommand = QStringLiteral("core/exitCommand");
-
-    // TODO: REMOVE In 2.0
-    inline static const auto ScreenName = QStringLiteral("core/screenName"); // Replaced By ComputerName
+    inline static const auto ComputerExitCommand = QStringLiteral("core/exitCommand");
   };
   struct Daemon
   {
@@ -126,26 +124,26 @@ public:
     inline static const auto XdpRestoreToken = QStringLiteral("server/xdpRestoreToken");
   };
 
-  struct Screen
+  struct Computer
   {
-    inline static const auto Aliases = QStringLiteral("screen_%1/aliases");
-    inline static const auto Name = QStringLiteral("screen_%1/name");
-    inline static const auto HalfDuplexCapsLock = QStringLiteral("screen_%1/halfDuplexCapsLock");
-    inline static const auto HalfDuplexNumLock = QStringLiteral("screen_%1/halfDuplexNumLock");
-    inline static const auto HalfDuplexScrollLock = QStringLiteral("screen_%1/halfDuplexScrollLock");
-    inline static const auto ModifierAlt = QStringLiteral("screen_%1/modifierAlt");
-    inline static const auto ModifierAltGr = QStringLiteral("screen_%1/modifierAltGr");
-    inline static const auto ModifierCtrl = QStringLiteral("screen_%1/modifierCtrl");
-    inline static const auto ModifierMeta = QStringLiteral("screen_%1/modifierMeta");
-    inline static const auto ModifierShift = QStringLiteral("screen_%1/modifierShift");
-    inline static const auto ModifierSuper = QStringLiteral("screen_%1/modifierSuper");
-    inline static const auto SwitchCornerSize = QStringLiteral("screen_%1/switchCornerSize");
-    inline static const auto SwitchCornerTopLeft = QStringLiteral("screen_%1/switchCornerTopLeft");
-    inline static const auto SwitchCornerTopRight = QStringLiteral("screen_%1/switchCornerTopRight");
-    inline static const auto SwitchCornerBottomLeft = QStringLiteral("screen_%1/switchCornerBottomLeft");
-    inline static const auto SwitchCornerBottomRight = QStringLiteral("screen_%1/switchCornerBottomRight");
-    inline static const auto WeakX11Focus = QStringLiteral("screen_%1/weakX11Focus");
-    inline static const auto XtestIsXineramaUnaware = QStringLiteral("screen_%1/xtestIsXineramaUnaware");
+    inline static const auto Aliases = QStringLiteral("computer_%1/aliases");
+    inline static const auto Name = QStringLiteral("computer_%1/name");
+    inline static const auto HalfDuplexCapsLock = QStringLiteral("computer_%1/halfDuplexCapsLock");
+    inline static const auto HalfDuplexNumLock = QStringLiteral("computer_%1/halfDuplexNumLock");
+    inline static const auto HalfDuplexScrollLock = QStringLiteral("computer_%1/halfDuplexScrollLock");
+    inline static const auto ModifierAlt = QStringLiteral("computer_%1/modifierAlt");
+    inline static const auto ModifierAltGr = QStringLiteral("computer_%1/modifierAltGr");
+    inline static const auto ModifierCtrl = QStringLiteral("computer_%1/modifierCtrl");
+    inline static const auto ModifierMeta = QStringLiteral("computer_%1/modifierMeta");
+    inline static const auto ModifierShift = QStringLiteral("computer_%1/modifierShift");
+    inline static const auto ModifierSuper = QStringLiteral("computer_%1/modifierSuper");
+    inline static const auto SwitchCornerSize = QStringLiteral("computer_%1/switchCornerSize");
+    inline static const auto SwitchCornerTopLeft = QStringLiteral("computer_%1/switchCornerTopLeft");
+    inline static const auto SwitchCornerTopRight = QStringLiteral("computer_%1/switchCornerTopRight");
+    inline static const auto SwitchCornerBottomLeft = QStringLiteral("computer_%1/switchCornerBottomLeft");
+    inline static const auto SwitchCornerBottomRight = QStringLiteral("computer_%1/switchCornerBottomRight");
+    inline static const auto WeakX11Focus = QStringLiteral("computer_%1/weakX11Focus");
+    inline static const auto XtestIsXineramaUnaware = QStringLiteral("computer_%1/xtestIsXineramaUnaware");
   };
 
   // Track Removed keys to make upgrading config easier
@@ -215,9 +213,9 @@ public:
   static QStringList validKeys();
   static QStringList validGroups();
   static QString portableSettingsFile();
-  static void removeUnknownScreens(const QStringList &knownScreens);
-  static QVariant screenDefaults(const QString &key);
-  static QStringList knownScreens();
+  static void removeUnknownComputers(const QStringList &knownComputers);
+  static QVariant computerDefaults(const QString &key);
+  static QStringList knownComputers();
 
 Q_SIGNALS:
   void settingsChanged(const QString key);
@@ -281,6 +279,7 @@ private:
     , Client::InvertXScroll
     , Client::LanguageSync
     , Client::RemoteHost
+    , Client::RecentRemoteHosts
     , Client::YScrollScale
     , Client::XScrollScale
     , Core::CoreMode
@@ -291,9 +290,8 @@ private:
     , Core::ProcessMode
     , Core::EnableEnterCommand
     , Core::EnableExitCommand
-    , Core::ScreenEnterCommand
-    , Core::ScreenExitCommand
-    , Core::ScreenName
+    , Core::ComputerEnterCommand
+    , Core::ComputerExitCommand
     , Core::ComputerName
     , Core::Display
     , Core::UseHooks
@@ -394,7 +392,7 @@ private:
   // Contains settings keys to be upgraded.
   inline static const QMap<QString, QString> m_upgradedMap = {
     /*             OLD KEY                        NEW KEY          */
-      {Core::ScreenName, Core::ComputerName}
+      {QStringLiteral("core/screenName"), Core::ComputerName}
     , {InternalConfig::NumColumns, Server::GridWidth}
     , {InternalConfig::NumRows, Server::GridHeight}
     , {InternalConfig::Heartbeat, Server::Heartbeat}

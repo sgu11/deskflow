@@ -74,6 +74,12 @@ def settings(folder, port, mode):
         f"[server]\nexternalConfig=true\nexternalConfigFile={folder / 'server.conf'}\n"
         "enableClipboard=false\n"
     )
+    if mode == "server":
+        # Since 1.27 computer names live in general settings; external config
+        # supplies links and actions, and its old screens section is ignored.
+        with config.open("a") as output:
+            output.write("[computer_protocol-server]\nname=protocol-server\n"
+                         "[computer_protocol-peer]\nname=protocol-peer\n")
     return [str(core), mode, "--new-instance", "--settings", str(config)]
 
 
@@ -144,7 +150,6 @@ def test_server(minor, root):
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
     (folder / "server.conf").write_text(
-        "section: screens\n  protocol-server:\n  protocol-peer:\nend\n"
         "section: links\n  protocol-server:\n    right = protocol-peer\n"
         "  protocol-peer:\n    left = protocol-server\nend\n"
         "section: options\n  keystroke(F1) = switchToScreen(protocol-peer)\nend\n"

@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QObject>
+#include <QTimer>
 
 class QLocalSocket;
 
@@ -16,11 +17,12 @@ class IpcClient : public QObject
 {
   Q_OBJECT
 
-  // Represents underlying socket state and whether the server responded to the hello message.
   enum class State
   {
     Unconnected,
+    RetryPending,
     Connecting,
+    AwaitingHello,
     Connected,
     Disconnecting,
   };
@@ -58,11 +60,14 @@ protected:
 private:
   void attemptConnection();
   void handleHandshakeMessage(const QStringList &parts);
+  void handleConnectionSuccess();
+  void failConnection();
 
   QLocalSocket *m_socket;
   State m_state{State::Unconnected};
   QString m_socketName;
   QByteArray m_readBuffer;
+  QTimer m_connectionTimer;
   int m_retryCount{0};
   QString m_typeName;
 };

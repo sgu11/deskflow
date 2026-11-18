@@ -34,6 +34,7 @@
 
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QLocalServer>
@@ -48,6 +49,7 @@
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QSignalBlocker>
 
 #include <memory>
 
@@ -133,7 +135,7 @@ MainWindow::MainWindow()
   updateText();
   connectSlots();
   setupTrayIcon();
-  updateScreenName();
+  updateComputerName();
   setHelpFilePath();
 
   qDebug().noquote() << "active settings path:" << Settings::settingsPath();
@@ -279,16 +281,24 @@ void MainWindow::connectSlots()
   connect(&m_coreProcess, &CoreProcess::peerFingerprint, this, &MainWindow::handlePeerFingerprint);
   connect(&m_coreProcess, &CoreProcess::missingKeyboardLayouts, this, &MainWindow::handleMissingKeyboardLayouts);
 
-  if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
-    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStopCore, &QAction::trigger, Qt::UniqueConnection);
-  } else {
-    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger, Qt::UniqueConnection);
-  }
+  connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger, Qt::UniqueConnection);
 
   connect(ui->btnRestartCore, &QPushButton::clicked, this, &MainWindow::resetCore);
 
-  connect(ui->lineHostname, &QLineEdit::returnPressed, ui->btnRestartCore, &QPushButton::click);
-  connect(ui->lineHostname, &QLineEdit::textChanged, this, &MainWindow::remoteHostChanged);
+  // The editable combo box can emit returnPressed twice for one key event.
+  m_hostnameEnterTimer.setSingleShot(true);
+  connect(ui->cbHostname->lineEdit(), &QLineEdit::returnPressed, this, [this] { m_hostnameEnterTimer.start(0); });
+  connect(&m_hostnameEnterTimer, &QTimer::timeout, this, [this] {
+    if (!canRunCore()) {
+      return;
+    }
+    if (m_coreProcess.isStarted()) {
+      resetCore();
+    } else if (m_coreProcess.processState() == ProcessState::Stopped) {
+      startCore();
+    }
+  });
+  connect(ui->cbHostname, &QComboBox::editTextChanged, this, &MainWindow::remoteHostChanged);
 
   connect(ui->btnSaveServerConfig, &QPushButton::clicked, this, &MainWindow::saveServerConfig);
   connect(ui->btnConfigureServer, &QPushButton::clicked, this, [this] { showConfigureServer(""); });
@@ -352,7 +362,7 @@ void MainWindow::settingsChanged(const QString &key)
   }
 
   if (key == Settings::Core::ComputerName)
-    updateScreenName();
+    updateComputerName();
 
   if ((key == Settings::Security::Certificate) || (key == Settings::Security::KeySize) ||
       (key == Settings::Security::TlsEnabled) || (key == Settings::Security::CheckPeers)) {
@@ -405,6 +415,18 @@ void MainWindow::coreProcessError(CoreProcess::Error error)
 
 void MainWindow::startCore()
 {
+  // No Mode Set
+  if (m_coreProcess.mode() == CoreMode::None) {
+    qDebug().noquote() << "skipping core start, no mode set";
+    return;
+  }
+
+  // Invalid client settings
+  if (m_coreProcess.mode() == CoreMode::Client && Settings::value(Settings::Client::RemoteHost).toString().isEmpty()) {
+    qDebug().noquote() << "skipping core start, undefined remotehost";
+    return;
+  }
+
   // Save current IP state when server starts
   if (m_coreProcess.mode() == CoreMode::Server && Settings::value(Settings::Core::Interface).toString().isEmpty()) {
     m_serverStartIPs = NetworkMonitor::validAddresses();
@@ -651,8 +673,6 @@ void MainWindow::open()
   }
 
   if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
-    if (ui->rbModeClient->isChecked() && ui->lineHostname->text().isEmpty())
-      return;
     startCore();
   }
 }
@@ -703,8 +723,7 @@ void MainWindow::applyConfig()
     setWindowTitle(kAppName);
   }
 
-  if (const auto host = Settings::value(Settings::Client::RemoteHost).toString(); !host.isEmpty())
-    ui->lineHostname->setText(host);
+  loadRecentHosts(Settings::value(Settings::Client::RemoteHost).toString());
 
   updateFingerprintButton();
   setTrayIcon();
@@ -717,6 +736,15 @@ void MainWindow::applyConfig()
   coreModeToggled(true);
 }
 
+void MainWindow::loadRecentHosts(const QString &editedHost)
+{
+  const QSignalBlocker blocker(ui->cbHostname);
+  ui->cbHostname->clear();
+  ui->cbHostname->addItems(Settings::value(Settings::Client::RecentRemoteHosts).toStringList());
+  ui->cbHostname->setCurrentIndex(-1);
+  ui->cbHostname->setEditText(editedHost);
+}
+
 void MainWindow::saveSettings() const
 {
   if (ui->rbModeClient->isChecked()) {
@@ -724,8 +752,9 @@ void MainWindow::saveSettings() const
   } else if (ui->rbModeServer->isChecked()) {
     Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Server);
   }
-  if (!ui->lineHostname->text().isEmpty())
-    Settings::setValue(Settings::Client::RemoteHost, ui->lineHostname->text());
+  if (!ui->cbHostname->currentText().isEmpty()) {
+    Settings::setValue(Settings::Client::RemoteHost, ui->cbHostname->currentText());
+  }
   Settings::save();
 }
 
@@ -778,7 +807,7 @@ void MainWindow::handleUnrecognisedClient(const QString &clientName)
   if (Settings::value(Settings::Server::ExternalConfig).toBool())
     return;
 
-  if (m_serverConfig.isFull() || m_serverConfig.screenExists(clientName))
+  if (m_serverConfig.isFull() || m_serverConfig.computerExists(clientName))
     return;
 
   m_newClientPromptShowing = true;
@@ -995,8 +1024,24 @@ void MainWindow::coreConnectionStateChanged(ConnectionState state)
   // when the correct TLS version string is detected.
   if (state != ConnectionState::Connected) {
     secureSocket(false);
-  } else if (isVisible()) {
-    showFirstConnectedMessage();
+  } else {
+    if (m_coreProcess.mode() == CoreMode::Client) {
+      if (const auto host = m_coreProcess.startedClientAddress(); !host.isEmpty()) {
+        QStringList recentHosts = Settings::value(Settings::Client::RecentRemoteHosts).toStringList();
+        if (recentHosts.isEmpty() || recentHosts.first() != host) {
+          recentHosts.removeAll(host);
+          recentHosts.prepend(host);
+          while (recentHosts.size() > 10) {
+            recentHosts.removeLast();
+          }
+          Settings::setValue(Settings::Client::RecentRemoteHosts, recentHosts);
+          loadRecentHosts(ui->cbHostname->currentText());
+        }
+      }
+    }
+    if (isVisible()) {
+      showFirstConnectedMessage();
+    }
   }
 }
 
@@ -1094,8 +1139,11 @@ void MainWindow::showConfigureServer(const QString &message)
 void MainWindow::showConfigureClient()
 {
   ClientConfigDialog dialog(this);
-  if ((dialog.exec() == QDialog::Accepted) && m_coreProcess.isStarted()) {
-    m_coreProcess.restart();
+  if (dialog.exec() == QDialog::Accepted) {
+    loadRecentHosts(ui->cbHostname->currentText());
+    if (dialog.coreSettingsChanged() && m_coreProcess.isStarted()) {
+      m_coreProcess.restart();
+    }
   }
 }
 
@@ -1105,11 +1153,11 @@ void MainWindow::secureSocket(bool secureSocket)
   updateSecurityIcon(m_statusBar->securityIconVisible());
 }
 
-void MainWindow::updateScreenName()
+void MainWindow::updateComputerName()
 {
-  const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
-  ui->lblComputerName->setText(screenName);
-  ui->lineEditName->setText(screenName);
+  const auto computerName = Settings::value(Settings::Core::ComputerName).toString();
+  ui->lblComputerName->setText(computerName);
+  ui->lineEditName->setText(computerName);
   m_serverConfig.updateServerName();
 }
 
@@ -1145,25 +1193,25 @@ void MainWindow::setHostName()
   toggleCanRunCore(canRunCore());
 
   QString text = ui->lineEditName->text();
-  const auto screenName = Settings::value(Settings::Core::ComputerName).toString();
+  const auto computerName = Settings::value(Settings::Core::ComputerName).toString();
 
-  if (text == screenName)
+  if (text == computerName)
     return;
 
   const bool isServer = ui->rbModeServer->isChecked();
-  bool existingScreen = false;
+  bool existingComputer = false;
   if (isServer)
-    existingScreen = serverConfig().screenExists(text);
+    existingComputer = serverConfig().computerExists(text);
 
-  if (!ui->lineEditName->hasAcceptableInput() || text.isEmpty() || existingScreen) {
+  if (!ui->lineEditName->hasAcceptableInput() || text.isEmpty() || existingComputer) {
     blockSignals(true);
-    ui->lineEditName->setText(screenName);
+    ui->lineEditName->setText(computerName);
     blockSignals(false);
 
-    const auto title = tr("Invalid Screen Name");
+    const auto title = tr("Invalid Computer Name");
     QString body;
-    if (existingScreen) {
-      body = tr("Screen name already exists");
+    if (existingComputer) {
+      body = tr("Computer name already exists");
     } else {
       body =
           tr("The name you have chosen is invalid.\n\n"
@@ -1226,7 +1274,6 @@ void MainWindow::toggleCanRunCore(bool enableButtons)
 
 void MainWindow::remoteHostChanged(const QString &newRemoteHost)
 {
-  m_coreProcess.setAddress(newRemoteHost);
   toggleCanRunCore(!newRemoteHost.isEmpty() && ui->rbModeClient->isChecked());
   if (newRemoteHost.isEmpty()) {
     Settings::setValue(Settings::Client::RemoteHost);
@@ -1325,5 +1372,5 @@ bool MainWindow::canRunCore() const
   const auto mode = m_coreProcess.mode();
   const bool isServer = mode == Settings::CoreMode::Server;
   const bool isClient = mode == Settings::CoreMode::Client;
-  return ((isServer || isClient) && (isClient && !ui->lineHostname->text().isEmpty()) || isServer);
+  return ((isServer || isClient) && (isClient && !ui->cbHostname->currentText().isEmpty()) || isServer);
 }

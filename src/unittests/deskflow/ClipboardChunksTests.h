@@ -17,6 +17,7 @@ private Q_SLOTS:
   void startFormatData();
   void formatDataChunk();
   void endFormatData();
+  void sendPreservesChunkBoundariesAndBytes();
   void assembleAllowsDataAtExpectedSizeAndLimit();
   void assembleRejectsDataBeyondExpectedSize();
   void assembleRefusesExpectedSizeBeyondLimit();

@@ -7,9 +7,12 @@
 
 #include "ClipboardChunksTests.h"
 
+#include "arch/Arch.h"
+#include "base/EventQueue.h"
 #include "deskflow/ClipboardChunk.h"
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/ProtocolUtil.h"
+#include "deskflow/StreamChunker.h"
 #include "io/IStream.h"
 
 #include <algorithm>
@@ -164,6 +167,41 @@ std::string encodeClipboardMsg(ClipboardID id, uint32_t seq, uint8_t mark, const
 void ClipboardChunksTests::initTestCase()
 {
   m_log.setFilter(LogLevel::Level::Debug);
+}
+
+void ClipboardChunksTests::sendPreservesChunkBoundariesAndBytes()
+{
+  Arch arch;
+  arch.init();
+  EventQueue events;
+  BufferWriteStream actual;
+  events.addHandler(EventTypes::ClipboardSending, this, [&actual](const Event &event) {
+    ClipboardChunk::send(&actual, event.getDataObject());
+  });
+
+  BufferWriteStream expected;
+  constexpr ClipboardID id = 1;
+  constexpr uint32_t sequence = 42;
+  const auto appendFrame = [&](uint8_t mark, const std::string &payload) {
+    ProtocolUtil::writef(&expected, kMsgDClipboard, id, sequence, mark, &payload);
+  };
+  {
+    std::string data(512 * 1024, 'a');
+    data.append("\0b", 2);
+    StreamChunker::sendClipboard(data, id, sequence, &events, this);
+    appendFrame(ChunkType::DataStart, std::to_string(data.size()));
+    appendFrame(ChunkType::DataChunk, data.substr(0, 512 * 1024));
+    appendFrame(ChunkType::DataChunk, data.substr(512 * 1024));
+    appendFrame(ChunkType::DataEnd, {});
+  }
+  StreamChunker::sendClipboard({}, id, sequence, &events, this);
+  appendFrame(ChunkType::DataStart, "0");
+  appendFrame(ChunkType::DataChunk, {});
+  appendFrame(ChunkType::DataEnd, {});
+  events.addEvent(Event(EventTypes::Quit));
+  events.loop();
+
+  QCOMPARE(actual.str(), expected.str());
 }
 
 void ClipboardChunksTests::startFormatData()

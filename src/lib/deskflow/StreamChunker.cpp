@@ -11,43 +11,31 @@
 #include "base/Log.h"
 #include "deskflow/ClipboardChunk.h"
 
-static const size_t g_chunkSize = 512 * 1024; // 512kb
+static constexpr size_t g_chunkSize = 512 * 1024;
 
 void StreamChunker::sendClipboard(
-    const std::string_view &data, size_t size, ClipboardID id, uint32_t sequence, IEventQueue *events, void *eventTarget
+    std::string_view data, ClipboardID id, uint32_t sequence, IEventQueue *events, void *eventTarget
 )
 {
   // send first message (data size)
+  const size_t size = data.size();
   std::string dataSize = QString::number(size).toStdString();
   ClipboardChunk *sizeMessage = ClipboardChunk::start(id, sequence, dataSize);
 
   events->addEvent(Event(EventTypes::ClipboardSending, eventTarget, sizeMessage));
 
-  // send clipboard chunk with a fixed size
-  size_t sentLength = 0;
-  size_t chunkSize = g_chunkSize;
-
-  while (true) {
-    // make sure we don't read too much from the mock data.
-    if (sentLength + chunkSize > size) {
-      chunkSize = size - sentLength;
-    }
-
-    std::string chunk(data.substr(sentLength, chunkSize).data(), chunkSize);
-    ClipboardChunk *dataChunk = ClipboardChunk::data(id, sequence, chunk);
-
+  // Preserve the data frame for an empty clipboard.
+  do {
+    const auto chunk = data.substr(0, g_chunkSize);
+    auto *dataChunk = ClipboardChunk::data(id, sequence, chunk);
     events->addEvent(Event(EventTypes::ClipboardSending, eventTarget, dataChunk));
-
-    sentLength += chunkSize;
-    if (sentLength == size) {
-      break;
-    }
-  }
+    data.remove_prefix(chunk.size());
+  } while (!data.empty());
 
   // send last message
   ClipboardChunk *end = ClipboardChunk::end(id, sequence);
 
   events->addEvent(Event(EventTypes::ClipboardSending, eventTarget, end));
 
-  LOG_DEBUG("sent clipboard size=%d", sentLength);
+  LOG_DEBUG("sent clipboard size=%zu", size);
 }

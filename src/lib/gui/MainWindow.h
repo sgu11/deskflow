@@ -13,6 +13,7 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSystemTrayIcon>
+#include <QTimer>
 #include <QUrl>
 
 #include "VersionChecker.h"
@@ -115,6 +116,8 @@ private:
   void createMenuBar();
   void setupTrayIcon();
   void applyConfig();
+  void loadRecentHosts(const QString &editedHost);
+  QTimer m_hostnameEnterTimer;
   void setTrayIcon();
   void handleUnrecognisedClient(const QString &clientName);
   void handleConnectionRefused(deskflow::core::ConnectionRefusal reason);
@@ -126,7 +129,7 @@ private:
   void connectSlots();
   void handleLogLine(const QString &line);
   void updateFingerprintButton();
-  void updateScreenName();
+  void updateComputerName();
   void saveSettings() const;
   void showConfigureServer(const QString &message);
   void showConfigureClient();

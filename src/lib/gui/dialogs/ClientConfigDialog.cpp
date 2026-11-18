@@ -19,10 +19,9 @@ ClientConfigDialog::ClientConfigDialog(QWidget *parent)
 {
   ui->setupUi(this);
   layout()->addWidget(m_buttonBox);
+  ui->btnClearServerHistory->setIcon(QIcon::fromTheme(QStringLiteral("edit-clear-all")));
   initConnections();
   load();
-  updateControls();
-  setButtonBoxEnabledButtons();
 }
 
 ClientConfigDialog::~ClientConfigDialog()
@@ -46,6 +45,10 @@ void ClientConfigDialog::updateControls() const
   ui->sbXScrollScale->setEnabled(writable);
   ui->cbYScrollInvert->setEnabled(writable);
   ui->sbYScrollScale->setEnabled(writable);
+  ui->btnClearServerHistory->setEnabled(
+      writable && !m_clearServerHistory &&
+      !Settings::value(Settings::Client::RecentRemoteHosts).toStringList().isEmpty()
+  );
 }
 
 void ClientConfigDialog::initConnections() const
@@ -58,6 +61,7 @@ void ClientConfigDialog::initConnections() const
   connect(
       ui->cbDynamicConnectTime, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons
   );
+  connect(ui->btnClearServerHistory, &QPushButton::clicked, this, &ClientConfigDialog::clearServerHistory);
   connect(ui->cbLanguageSync, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
   connect(ui->cbYScrollInvert, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
   connect(ui->sbYScrollScale, &QDoubleSpinBox::valueChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
@@ -66,10 +70,10 @@ void ClientConfigDialog::initConnections() const
   connect(Settings::instance(), &Settings::settingsWritableChanged, this, &ClientConfigDialog::updateControls);
 }
 
-bool ClientConfigDialog::isModified() const
+bool ClientConfigDialog::hasCoreSettingsChanges() const
 {
-  return (ui->cbDynamicConnectTime->isChecked() != Settings::value(Settings::Client::DynamicConnectionRetry).toBool()
-         ) ||
+  return (ui->cbDynamicConnectTime->isChecked() !=
+          Settings::value(Settings::Client::DynamicConnectionRetry).toBool()) ||
          (ui->cbLanguageSync->isChecked() != Settings::value(Settings::Client::LanguageSync).toBool()) ||
          (ui->cbYScrollInvert->isChecked() != Settings::value(Settings::Client::InvertYScroll).toBool()) ||
          (ui->sbYScrollScale->value() != Settings::value(Settings::Client::YScrollScale).toDouble()) ||
@@ -90,7 +94,7 @@ bool ClientConfigDialog::isDefault() const
 
 void ClientConfigDialog::setButtonBoxEnabledButtons() const
 {
-  const bool modified = isModified();
+  const bool modified = hasCoreSettingsChanges() || m_clearServerHistory;
   m_buttonBox->enableSave(modified);
   m_buttonBox->enableReset(modified);
   m_buttonBox->enableRestoreDefaults(!isDefault());
@@ -98,12 +102,15 @@ void ClientConfigDialog::setButtonBoxEnabledButtons() const
 
 void ClientConfigDialog::load()
 {
+  m_clearServerHistory = false;
   ui->cbDynamicConnectTime->setChecked(Settings::value(Settings::Client::DynamicConnectionRetry).toBool());
   ui->cbLanguageSync->setChecked(Settings::value(Settings::Client::LanguageSync).toBool());
   ui->cbYScrollInvert->setChecked(Settings::value(Settings::Client::InvertYScroll).toBool());
   ui->sbYScrollScale->setValue(Settings::value(Settings::Client::YScrollScale).toDouble());
   ui->cbXScrollInvert->setChecked(Settings::value(Settings::Client::InvertXScroll).toBool());
   ui->sbXScrollScale->setValue(Settings::value(Settings::Client::XScrollScale).toDouble());
+  updateControls();
+  setButtonBoxEnabledButtons();
 }
 
 void ClientConfigDialog::resetToDefault()
@@ -118,6 +125,10 @@ void ClientConfigDialog::resetToDefault()
 
 void ClientConfigDialog::save()
 {
+  m_coreSettingsChanged = hasCoreSettingsChanges();
+  if (m_clearServerHistory) {
+    Settings::setValue(Settings::Client::RecentRemoteHosts, QVariant());
+  }
   Settings::setValue(Settings::Client::DynamicConnectionRetry, ui->cbDynamicConnectTime->isChecked());
   Settings::setValue(Settings::Client::LanguageSync, ui->cbLanguageSync->isChecked());
   Settings::setValue(Settings::Client::InvertYScroll, ui->cbYScrollInvert->isChecked());
@@ -125,4 +136,11 @@ void ClientConfigDialog::save()
   Settings::setValue(Settings::Client::InvertXScroll, ui->cbXScrollInvert->isChecked());
   Settings::setValue(Settings::Client::XScrollScale, ui->sbXScrollScale->value());
   QDialog::accept();
+}
+
+void ClientConfigDialog::clearServerHistory()
+{
+  m_clearServerHistory = true;
+  updateControls();
+  setButtonBoxEnabledButtons();
 }

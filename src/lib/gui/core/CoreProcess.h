@@ -70,11 +70,12 @@ public:
     return m_connectionState;
   }
 
-  // setters
-  void setAddress(const QString &address)
+  QString startedClientAddress() const
   {
-    m_address = correctedAddress(address);
+    return m_startedClientAddress;
   }
+
+  // setters
   void setMode(Settings::CoreMode mode)
   {
     m_mode = mode;
@@ -112,16 +113,14 @@ private:
   void setProcessState(ProcessState state);
   bool checkSecureSocket(const QString &line);
   void handleLogLines(const QString &text);
-  QString correctedAddress(const QString &address) const;
   void setupDaemonLogTail(const QString &logPath);
   void checkExistingProcess();
   static QString makeQuotedArgs(const QString &app, const QStringList &args);
   static QString processModeToString(const Settings::ProcessMode mode);
   static QString processStateToString(const CoreProcess::ProcessState state);
-  static QString wrapIpv6(const QString &address);
 
   const ServerConfig &m_serverConfig;
-  QString m_address;
+  QString m_startedClientAddress;
   ProcessState m_processState = ProcessState::Stopped;
   ConnectionState m_connectionState = ConnectionState::Disconnected;
   Settings::CoreMode m_mode = Settings::CoreMode::None;

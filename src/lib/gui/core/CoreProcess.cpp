@@ -69,32 +69,6 @@ QString CoreProcess::makeQuotedArgs(const QString &app, const QStringList &args)
   return quoted.join(space);
 }
 
-/**
- * @brief If IPv6, ensures the IP is surround in square brackets.
- */
-QString CoreProcess::wrapIpv6(const QString &address)
-{
-  static const auto colon = QStringLiteral(":");
-  static const auto openBracket = QStringLiteral("[");
-  static const auto closeBracket = QStringLiteral("]");
-
-  if (!address.contains(colon) || address.isEmpty()) {
-    return address;
-  }
-
-  QString wrapped = address;
-
-  if (!address.startsWith(openBracket)) {
-    wrapped.prepend(openBracket);
-  }
-
-  if (!address.endsWith(closeBracket)) {
-    wrapped.append(closeBracket);
-  }
-
-  return wrapped;
-}
-
 //
 // CoreProcess
 //
@@ -394,6 +368,8 @@ void CoreProcess::start(std::optional<ProcessMode> processModeOption)
 
   qInfo().noquote() << QString("starting %1 process (%2 mode)").arg(coreMode, processModeToString(processMode));
 
+  m_startedClientAddress =
+      m_mode == Settings::CoreMode::Client ? Settings::value(Settings::Client::RemoteHost).toString() : QString();
   setProcessState(ProcessState::Starting);
 
 #ifdef Q_OS_MACOS
@@ -680,11 +656,6 @@ bool CoreProcess::checkSecureSocket(const QString &line)
   }
 
   return true;
-}
-
-QString CoreProcess::correctedAddress(const QString &address) const
-{
-  return wrapIpv6(address.simplified());
 }
 
 void CoreProcess::setupDaemonLogTail(const QString &logPath)

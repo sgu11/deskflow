@@ -7,11 +7,15 @@
 #include "EventQueueTests.h"
 
 #include "base/EventQueue.h"
+#include "base/SimpleEventQueueBuffer.h"
 
 #include <QTest>
 
 #include <chrono>
+#include <future>
 #include <memory>
+#include <semaphore>
+#include <thread>
 
 void EventQueueTests::initTestCase()
 {
@@ -81,6 +85,53 @@ void EventQueueTests::dispatchEvent_handlerRemovesItself_keepsHandlerAliveUntilR
   QVERIFY(events.dispatchEvent(Event(EventTypes::ClientDisconnected, this)));
   QVERIFY(handlerAliveAfterRemoval);
   QVERIFY(handlerLifetimeObserver.expired());
+}
+
+void EventQueueTests::waitForReady_loopSignalledBeforeWait_returns()
+{
+  EventQueue events;
+  events.addEvent(Event(EventTypes::Quit));
+  events.loop();
+
+  events.waitForReady();
+}
+
+void EventQueueTests::waitForReady_waitsUntilPendingEventsReachBuffer()
+{
+  using namespace std::chrono_literals;
+
+  class PausedBuffer : public SimpleEventQueueBuffer
+  {
+  public:
+    bool addEvent(uint32_t id) override
+    {
+      entered.release();
+      resume.acquire();
+      return SimpleEventQueueBuffer::addEvent(id);
+    }
+
+    std::binary_semaphore entered{0};
+    std::binary_semaphore resume{0};
+  };
+
+  EventQueue events;
+  auto *buffer = new PausedBuffer;
+  events.adoptBuffer(buffer);
+  events.addEvent(Event(EventTypes::Quit));
+  std::jthread eventThread([&] { events.loop(); });
+
+  buffer->entered.acquire();
+  std::promise<void> waiterEntered;
+  auto ready = std::async(std::launch::async, [&] {
+    waiterEntered.set_value();
+    events.waitForReady();
+  });
+  waiterEntered.get_future().wait();
+  const auto beforeDrain = ready.wait_for(100ms);
+
+  buffer->resume.release();
+  ready.get();
+  QVERIFY(beforeDrain == std::future_status::timeout);
 }
 
 QTEST_MAIN(EventQueueTests)

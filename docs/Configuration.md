@@ -75,10 +75,10 @@ This section contains general options it will begin with `[core]`
 | computerName  | string            | Name used to identify the computer [default: machine's hostname] |
 | useHooks      | `true` or `false` | If Windows uses hooks or not [default: true] |
 | language      | 639 language      | The language to display the GUI in [default: en] |
-| enableEnterCommand | `true` or `false` | Should the enter command be triggered when the screen is entered [defaut: false] |
-| enterCommand  | command | A command to run when the screen is entered. |
-| enableExitCommand | `true` or `false` | Should the exit command be triggered when the screen is exited [defaut: false] |
-| exitCommand  | command | A command to run when the screen is exited. |
+| enableEnterCommand | `true` or `false` | Should the enter command be triggered when the computer is entered [defaut: false] |
+| enterCommand  | command | A command to run when the computer is entered. |
+| enableExitCommand | `true` or `false` | Should the exit command be triggered when the computer is exited [defaut: false] |
+| exitCommand  | command | A command to run when the computer is exited. |
 
 ### Daemon
 
@@ -86,7 +86,6 @@ This section contains options used by the daemon on windows it will begin with `
 
 |Option | Valid Values|Description|
 |:----------|:-----------:|:-----------|
-| command   | Filename          | The filename of the binary the daemon. This binary exists in the same path as the deskflow GUI |
 | elevate   | `true` or `false` | Elevate the daemon app [default: true unless portable mode ] |
 | logFile   | Filepath          | Filepath of the daemon log |
 | logLevel  | valid log Level,  | Log Level  |
@@ -158,9 +157,9 @@ This section contains options used when in server mode it will begin with `[serv
 
  - You can use both the ''switchDelay'' and ''switchDoubleTap'' options at the same time. Deskflow will switch when either requirement is satisfied.
 
-### Screen Settings
+### Computer Settings
 
-Each screen will have a section where its configuration will be stored, if the screen was named "foo" the section will be named `[screen_foo]`
+Each computer will have a section where its configuration will be stored, if the computer was named "foo" the section will be named `[computer_foo]`
 
 |Option                  |    Valid Values   |Description|
 |:-----------------------|:-----------------:|:-----------|
@@ -181,7 +180,7 @@ Each screen will have a section where its configuration will be stored, if the s
 | switchCornerBottomLeft | `true` or `false` | Deskflow won't switch computers when the mouse reaches the edge of the computer if it includes this corner. The size of the corner is given by the `switchCornerSize` option. |
 | switchCornerBottomRight| `true` or `false` | Deskflow won't switch computers when the mouse reaches the edge of the computer if it includes this corner. The size of the corner is given by the `switchCornerSize` option. |
 | xtestIsXineramaUnaware | `true` or `false` | This option works around a bug in the XTest extension when used in combination with Xinerama. It affects X11 clients only. Not all versions of the XTest extension are aware of the Xinerama extension. As a result, they do not move the mouse correctly when using multiple Xinerama screens. This option is currently ''true'' by default. If you know your XTest extension is Xinerama aware then set this option to ''false''.|
-| weakX11Focus           | `true` or `false` | This X11 Client will not gain focus until an input event has been processed its screen |
+| weakX11Focus           | `true` or `false` | This X11 Client will not gain focus until an input event has been processed its any of its screens |
 
 ### InternalConfig
 
@@ -239,7 +238,7 @@ Comments are introduced by ''#'' and continue to the end of the line. ''name'' m
 * ''links''
 * ''options''
 
-The file is parsed top to bottom and names cannot be used before they've been defined in the `screens` or as an alias in the general config. So the `links` must appear after the `screens`.
+The file is parsed top to bottom and names cannot be used before they've been defined in the general config or as an alias in the general config.
 
 ### links secion
 
@@ -502,15 +501,6 @@ This example comes from doc/deskflow-basic.conf
 # |       |  |        | |         |
 # +-------+  +--------+ +---------+
 
-section: screens
-	# three hosts named:  Laptop, Desktop1, and iMac
-	# These are the nice names of the hosts to make it easy to write the config file
-	# The aliases section below contain the "actual" names of the hosts (their hostnames)
-	Laptop:
-	Desktop1:
-	iMac:
-end
-
 section: links
 	# iMac is to the right of Desktop1
 	# Laptop is to the left of Desktop1
@@ -545,10 +535,6 @@ The text config allows computers to be wrapped around. For example, with two mac
 #  |          |          |
 #  +----------+----------+ 
  
-section: screens
-	syn-serv:
-	syn-cli:
-end
 section: links
 	syn-serv:
 		left = syn-cli     # "wrapping" arrangement
@@ -563,15 +549,6 @@ section: options
 end
 ```
 
-### AltGr key
-
-The following screen config allows the mapping for ''Alt'' to ''AltGr''. Although this may not work, see [https://github.com/deskflow/deskflow-core/issues/4411 bug #4411].
-```
-section: screens
-	client1:
-		altgr = alt          # mapping to fix AltGr key not working on windows clients (e.g. @-Symbol etc.).
-end
-```
 
 See also: the man page for ''deskflow-core''.
 
@@ -589,13 +566,6 @@ Stack one computer on top of another's.
 # |       | |       |
 # +-------+ +-------+
 
-section: screens
-	# three hosts named: moe, larry, and curly
-	moe:
-	larry:
-	curly:
-end
-
 section: links
 	# larry is to the right of moe and curly is above moe.
 	moe:
@@ -612,11 +582,6 @@ section: links
 		down  = larry
 end
 
-section: aliases
-	# curly is also known as shemp
-	curly:
-		shemp
-end
 ```
 
 ### Horizontal Example
@@ -628,13 +593,6 @@ Align all computers horizontally.
 # | moe   | | larry | | curly |
 # |       | |       | |       |
 # +-------+ +-------+ +-------+
-
-section: screens
-	# three hosts named: moe, larry, and curly
-	moe:
-	larry:
-	curly:
-end
 
 section: links
 	# curly is to the right of larry and moe is to the left of larry.
@@ -666,13 +624,6 @@ Span one computer across the two other computers.
 # | moe   | | larry |
 # |       | |       |
 # +-------+ +-------+
-
-section: screens
-	# three hosts named: moe, larry, and curly
-	moe:
-	larry:
-	curly:
-end
 
 section: links
 	# larry is to the right of moe and curly is above moe.

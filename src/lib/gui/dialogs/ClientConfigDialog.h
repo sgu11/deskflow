@@ -26,6 +26,11 @@ public:
   explicit ClientConfigDialog(QWidget *parent = nullptr);
   ~ClientConfigDialog() override;
 
+  bool coreSettingsChanged() const
+  {
+    return m_coreSettingsChanged;
+  }
+
 protected:
   void changeEvent(QEvent *e) override;
 
@@ -45,7 +50,7 @@ private:
    * @brief isModified
    * @return true when any client settings in the gui do not match the stored settings values.
    */
-  bool isModified() const;
+  bool hasCoreSettingsChanges() const;
 
   /**
    * @brief isDefault
@@ -74,6 +79,10 @@ private:
    */
   void save();
 
+  void clearServerHistory();
+
+  bool m_clearServerHistory = false;
+  bool m_coreSettingsChanged = false;
   Ui::ClientConfigDialog *ui = nullptr;
   SettingsDialogButtonBox *m_buttonBox = nullptr;
 };
